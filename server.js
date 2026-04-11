@@ -1,4 +1,5 @@
 const express = require("express");
+
 const app = express();
 
 app.use(express.json());
@@ -31,9 +32,10 @@ res.send("Subscription Successful");
 
 });
 
+// Root Test
 app.get("/", (req,res)=>{
 res.send("BDapps Cricket Server Running");
-})
+});
 
 app.listen(10000, () => {
 

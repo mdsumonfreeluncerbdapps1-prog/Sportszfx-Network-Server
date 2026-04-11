@@ -9,7 +9,7 @@ app.use(express.urlencoded({ extended: true }));
 // CricAPI KEY
 const API_KEY = "a0a5a7d4-f83a-4cb6-ae97-91238413ec8c";
 
-// Function: Live Score Fetch
+// Live Score Function
 async function getLiveScore() {
 
   try {
@@ -46,9 +46,19 @@ app.post("/sms_listener", async (req, res) => {
 
   console.log("SMS Received:", req.body);
 
-  const score = await getLiveScore();
+  const message = req.body.message || "";
+  const text = message.toLowerCase();
 
-  res.send(score);
+  if(text === "cricketscoreupdate"){
+
+    const score = await getLiveScore();
+    res.send(score);
+
+  } else {
+
+    res.send("Send CRICKETSCOREUPDATE to get live cricket score");
+
+  }
 
 });
 
@@ -71,7 +81,7 @@ app.post("/sub_listener", (req, res) => {
 });
 
 // Root Test
-app.get("/", (req, res) => {
+app.get("/", (req,res)=>{
   res.send("BDapps Cricket Server Running");
 });
 

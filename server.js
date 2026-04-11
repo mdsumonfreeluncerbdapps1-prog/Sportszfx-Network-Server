@@ -10,10 +10,11 @@ const API_KEY = "a0a5a7d4-f83a-4cb6-ae97-91238413ec8c";
 
 // Live Score Function
 async function getLiveScore() {
-
   try {
 
-    const response = await axios.get(https://api.cricapi.com/v1/currentMatches?apikey=${API_KEY});
+    const response = await axios.get(
+      https://api.cricapi.com/v1/currentMatches?apikey=${API_KEY}
+    );
 
     const match = response.data.data[0];
 
@@ -35,7 +36,6 @@ async function getLiveScore() {
     return "Score unavailable";
 
   }
-
 }
 
 // SMS Listener
@@ -68,4 +68,21 @@ app.post("/ussd_listener", (req, res) => {
 // Subscription Listener
 app.post("/sub_listener", (req, res) => {
 
-  console.log("Subscription
+  console.log("Subscription Event:", req.body);
+  res.send("Subscription Successful");
+
+});
+
+// Root
+app.get("/", (req, res) => {
+
+  res.send("BDapps Cricket Server Running");
+
+});
+
+// Start Server
+app.listen(10000, () => {
+
+  console.log("Server running on port 10000");
+
+});

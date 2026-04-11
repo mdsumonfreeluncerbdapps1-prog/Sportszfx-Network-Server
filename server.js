@@ -6,10 +6,9 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// CricAPI KEY
 const API_KEY = "a0a5a7d4-f83a-4cb6-ae97-91238413ec8c";
 
-// Live Score Function
+// Get Live Score
 async function getLiveScore() {
 
   try {
@@ -34,7 +33,7 @@ async function getLiveScore() {
 
   } catch (error) {
 
-    console.log("API Error:", error);
+    console.log(error);
     return "Score unavailable";
 
   }
@@ -49,9 +48,10 @@ app.post("/sms_listener", async (req, res) => {
   const message = req.body.message || "";
   const text = message.toLowerCase();
 
-  if(text === "cricketscoreupdate"){
+  if (text === "cricketscoreupdate") {
 
     const score = await getLiveScore();
+
     res.send(score);
 
   } else {
@@ -62,10 +62,8 @@ app.post("/sms_listener", async (req, res) => {
 
 });
 
-// USSD Listener
+// USSD Menu
 app.post("/ussd_listener", (req, res) => {
-
-  console.log("USSD Request:", req.body);
 
   res.send("1. Live Match\n2. Bangladesh Match\n3. IPL Match");
 
@@ -80,9 +78,11 @@ app.post("/sub_listener", (req, res) => {
 
 });
 
-// Root Test
-app.get("/", (req,res)=>{
+// Root
+app.get("/", (req, res) => {
+
   res.send("BDapps Cricket Server Running");
+
 });
 
 app.listen(10000, () => {

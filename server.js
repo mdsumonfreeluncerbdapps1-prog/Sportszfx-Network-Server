@@ -80,7 +80,7 @@ app.get("/", (req, res) => {
 
 });
 
-// Render compatible PORT
+// Render compatible port
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {

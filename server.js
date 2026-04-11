@@ -80,9 +80,11 @@ app.get("/", (req, res) => {
 
 });
 
-// Start Server
-app.listen(10000, () => {
+// Render compatible PORT
+const PORT = process.env.PORT || 10000;
 
-  console.log("Server running on port 10000");
+app.listen(PORT, () => {
+
+  console.log("Server running on port " + PORT);
 
 });

@@ -30,30 +30,42 @@ async function getLiveMatches() {
       }
     );
 
-    const matches = response.data.typeMatches[0].seriesMatches;
+    const data = response.data;
 
     liveMatches = [];
 
-    matches.forEach(series => {
+    if (data && data.typeMatches) {
 
-      if (series.seriesAdWrapper && series.seriesAdWrapper.matches) {
+      data.typeMatches.forEach(type => {
 
-        series.seriesAdWrapper.matches.forEach(match => {
+        if (type.seriesMatches) {
 
-          const team1 = match.matchInfo.team1.teamName;
-          const team2 = match.matchInfo.team2.teamName;
+          type.seriesMatches.forEach(series => {
 
-          liveMatches.push({
-            id: match.matchInfo.matchId,
-            team1: team1,
-            team2: team2
+            if (series.seriesAdWrapper && series.seriesAdWrapper.matches) {
+
+              series.seriesAdWrapper.matches.forEach(match => {
+
+                const team1 = match.matchInfo.team1.teamName;
+                const team2 = match.matchInfo.team2.teamName;
+
+                liveMatches.push({
+                  id: match.matchInfo.matchId,
+                  team1: team1,
+                  team2: team2
+                });
+
+              });
+
+            }
+
           });
 
-        });
+        }
 
-      }
+      });
 
-    });
+    }
 
   } catch (error) {
 
@@ -80,14 +92,16 @@ async function getMatchScore(matchId) {
       }
     );
 
-    const score = response.data.matchScore;
+    const data = response.data;
 
-    const team1 = response.data.matchHeader.team1.name;
-    const team2 = response.data.matchHeader.team2.name;
+    const team1 = data.matchHeader.team1.name;
+    const team2 = data.matchHeader.team2.name;
 
-    const runs = score.team1Score.inngs1.runs;
-    const wickets = score.team1Score.inngs1.wickets;
-    const overs = score.team1Score.inngs1.overs;
+    const score = data.matchScore.team1Score.inngs1;
+
+    const runs = score.runs;
+    const wickets = score.wickets;
+    const overs = score.overs;
 
     return `${team1} vs ${team2}
 Score: ${runs}/${wickets}
@@ -98,6 +112,7 @@ Over: ${overs}
 
   } catch (error) {
 
+    console.log("Score Error:", error.message);
     return "Score unavailable";
 
   }
@@ -113,16 +128,19 @@ app.post("/sms_listener", async (req, res) => {
 
   console.log("SMS:", message);
 
-  // Show Live Matches
   if (message === "cricketscoreupdate") {
 
     await getLiveMatches();
+
+    if (liveMatches.length === 0) {
+      return res.send("No live matches right now");
+    }
 
     let menu = "Live Matches\n";
 
     let count = 1;
 
-    liveMatches.slice(0,3).forEach(match => {
+    liveMatches.slice(0, 3).forEach(match => {
 
       menu += ${count}. ${match.team1} vs ${match.team2}\n;
 
@@ -136,7 +154,7 @@ app.post("/sms_listener", async (req, res) => {
 
   }
 
-  // Match Selection
+  // Match selection
   if (!isNaN(message)) {
 
     const index = parseInt(message) - 1;

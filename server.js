@@ -14,59 +14,62 @@ let liveMatches = [];
 let selectedMatch = null;
 
 // =====================
-// GET LIVE MATCHES
+// GET MATCHES (Live → Upcoming → Recent)
 // =====================
 async function getMatches() {
 
-  try {
+  const endpoints = [
+    "https://cricbuzz-cricket2.p.rapidapi.com/matches/v1/live",
+    "https://cricbuzz-cricket2.p.rapidapi.com/matches/v1/upcoming",
+    "https://cricbuzz-cricket2.p.rapidapi.com/matches/v1/recent"
+  ];
 
-    const response = await axios.get(
-      "https://cricbuzz-cricket2.p.rapidapi.com/matches/v1/live",
-      {
+  liveMatches = [];
+
+  for (let url of endpoints) {
+
+    try {
+
+      const response = await axios.get(url, {
         headers: {
           "X-RapidAPI-Key": API_KEY,
           "X-RapidAPI-Host": API_HOST
         }
-      }
-    );
+      });
 
-    const data = response.data;
+      const data = response.data;
 
-    liveMatches = [];
+      if (data.typeMatches) {
 
-    if (data.typeMatches) {
+        data.typeMatches.forEach(type => {
 
-      data.typeMatches.forEach(type => {
+          type.seriesMatches?.forEach(series => {
 
-        if (type.seriesMatches) {
+            series.seriesAdWrapper?.matches?.forEach(match => {
 
-          type.seriesMatches.forEach(series => {
-
-            if (series.seriesAdWrapper && series.seriesAdWrapper.matches) {
-
-              series.seriesAdWrapper.matches.forEach(match => {
-
-                liveMatches.push({
-                  id: match.matchInfo.matchId,
-                  team1: match.matchInfo.team1.teamName,
-                  team2: match.matchInfo.team2.teamName
-                });
-
+              liveMatches.push({
+                id: match.matchInfo.matchId,
+                team1: match.matchInfo.team1.teamName,
+                team2: match.matchInfo.team2.teamName
               });
 
-            }
+            });
 
           });
 
-        }
+        });
 
-      });
+      }
+
+      if (liveMatches.length > 0) {
+        break;
+      }
+
+    } catch (error) {
+
+      console.log("API ERROR:", error.message);
 
     }
-
-  } catch (error) {
-
-    console.log("API ERROR:", error.message);
 
   }
 
@@ -134,7 +137,11 @@ app.post("/sms_listener", async (req, res) => {
 
     await getMatches();
 
-    let menu = "Live Matches\n";
+    if (liveMatches.length === 0) {
+      return res.send("No matches available right now");
+    }
+
+    let menu = "Matches\n";
 
     liveMatches.slice(0,3).forEach((match,index) => {
 
@@ -172,7 +179,7 @@ app.post("/sms_listener", async (req, res) => {
 
   }
 
-  res.send("Send CRICKETSCOREUPDATE to see live matches");
+  res.send("Send CRICKETSCOREUPDATE to see cricket matches");
 
 });
 

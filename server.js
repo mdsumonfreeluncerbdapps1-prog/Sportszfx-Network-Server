@@ -14,64 +14,93 @@ let liveMatches = [];
 let selectedMatch = null;
 
 // =====================
-// GET MATCHES (Live → Upcoming → Recent)
+// FETCH MATCHES
 // =====================
-async function getMatches() {
+async function fetchMatches(url) {
 
-  const endpoints = [
-    "https://cricbuzz-cricket2.p.rapidapi.com/matches/v1/live",
-    "https://cricbuzz-cricket2.p.rapidapi.com/matches/v1/upcoming",
-    "https://cricbuzz-cricket2.p.rapidapi.com/matches/v1/recent"
-  ];
+  try {
 
-  liveMatches = [];
+    const response = await axios.get(url, {
+      headers: {
+        "X-RapidAPI-Key": API_KEY,
+        "X-RapidAPI-Host": API_HOST
+      }
+    });
 
-  for (let url of endpoints) {
+    const data = response.data;
 
-    try {
+    let matches = [];
 
-      const response = await axios.get(url, {
-        headers: {
-          "X-RapidAPI-Key": API_KEY,
-          "X-RapidAPI-Host": API_HOST
-        }
-      });
+    if (data.typeMatches) {
 
-      const data = response.data;
+      data.typeMatches.forEach(type => {
 
-      if (data.typeMatches) {
+        if (type.seriesMatches) {
 
-        data.typeMatches.forEach(type => {
+          type.seriesMatches.forEach(series => {
 
-          type.seriesMatches?.forEach(series => {
+            if (series.seriesAdWrapper && series.seriesAdWrapper.matches) {
 
-            series.seriesAdWrapper?.matches?.forEach(match => {
+              series.seriesAdWrapper.matches.forEach(match => {
 
-              liveMatches.push({
-                id: match.matchInfo.matchId,
-                team1: match.matchInfo.team1.teamName,
-                team2: match.matchInfo.team2.teamName
+                matches.push({
+                  id: match.matchInfo.matchId,
+                  team1: match.matchInfo.team1.teamName,
+                  team2: match.matchInfo.team2.teamName
+                });
+
               });
 
-            });
+            }
 
           });
 
-        });
+        }
 
-      }
-
-      if (liveMatches.length > 0) {
-        break;
-      }
-
-    } catch (error) {
-
-      console.log("API ERROR:", error.message);
+      });
 
     }
 
+    return matches;
+
+  } catch (error) {
+
+    console.log("API ERROR:", error.message);
+    return [];
+
   }
+
+}
+
+// =====================
+// GET MATCH LIST
+// =====================
+async function getMatches() {
+
+  // Step 1 → Live
+  let matches = await fetchMatches(
+    "https://cricbuzz-cricket2.p.rapidapi.com/matches/v1/live"
+  );
+
+  if (matches.length > 0) {
+    return matches;
+  }
+
+  // Step 2 → Upcoming
+  matches = await fetchMatches(
+    "https://cricbuzz-cricket2.p.rapidapi.com/matches/v1/upcoming"
+  );
+
+  if (matches.length > 0) {
+    return matches;
+  }
+
+  // Step 3 → Recent
+  matches = await fetchMatches(
+    "https://cricbuzz-cricket2.p.rapidapi.com/matches/v1/recent"
+  );
+
+  return matches;
 
 }
 
@@ -100,7 +129,10 @@ async function getScore(matchId) {
     const scoreData = data.matchScore?.team1Score?.inngs1;
 
     if (!scoreData) {
-      return `${team1} vs ${team2}\nScore not available`;
+
+      return `${team1} vs ${team2}
+Score not available`;
+
     }
 
     const runs = scoreData.runs;
@@ -135,7 +167,7 @@ app.post("/sms_listener", async (req, res) => {
 
   if (message === "cricketscoreupdate") {
 
-    await getMatches();
+    liveMatches = await getMatches();
 
     if (liveMatches.length === 0) {
       return res.send("No matches available right now");
@@ -143,9 +175,9 @@ app.post("/sms_listener", async (req, res) => {
 
     let menu = "Matches\n";
 
-    liveMatches.slice(0,3).forEach((match,index) => {
+    liveMatches.slice(0,3).forEach((match,index)=>{
 
-      menu += `${index + 1}. ${match.team1} vs ${match.team2}\n`;
+      menu += `${index+1}. ${match.team1} vs ${match.team2}\n`;
 
     });
 
@@ -155,14 +187,15 @@ app.post("/sms_listener", async (req, res) => {
 
   }
 
+  // Refresh
   if (message === "1" && selectedMatch) {
 
     const score = await getScore(selectedMatch);
-
     return res.send(score);
 
   }
 
+  // Match select
   if (!isNaN(message)) {
 
     const index = parseInt(message) - 1;
@@ -179,7 +212,7 @@ app.post("/sms_listener", async (req, res) => {
 
   }
 
-  res.send("Send CRICKETSCOREUPDATE to see cricket matches");
+  res.send("Send CRICKETSCOREUPDATE for cricket matches");
 
 });
 

@@ -6,53 +6,116 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-const API_KEY = "a0a5a7d4-f83a-4cb6-ae97-91238413ec8c";
+const PORT = process.env.PORT || 10000;
 
-// Live Score Function
-async function getLiveScore() {
+// RapidAPI key
+const API_KEY = "YOUR_RAPIDAPI_KEY";
+
+// User temporary session
+const userSessions = {};
+
+// Get Live Matches
+async function getLiveMatches() {
+
   try {
 
     const response = await axios.get(
-      https://api.cricapi.com/v1/currentMatches?apikey=${API_KEY}
+      "https://cricbuzz-cricket2.p.rapidapi.com/matches/v1/live",
+      {
+        headers: {
+          "X-RapidAPI-Key": API_KEY,
+          "X-RapidAPI-Host": "cricbuzz-cricket2.p.rapidapi.com"
+        }
+      }
     );
 
-    const match = response.data.data[0];
+    const matches = [];
 
-    if (!match || !match.score || match.score.length === 0) {
-      return "No live match right now";
-    }
+    const data = response.data.typeMatches;
 
-    const team1 = match.teams[0];
-    const team2 = match.teams[1];
+    data.forEach(type => {
 
-    const score = match.score[0].r + "/" + match.score[0].w;
-    const over = match.score[0].o;
+      type.seriesMatches.forEach(series => {
 
-    return ${team1} vs ${team2}\nScore: ${score}\nOver: ${over};
+        if (series.seriesAdWrapper) {
+
+          series.seriesAdWrapper.matches.forEach(match => {
+
+            const team1 = match.matchInfo.team1.teamName;
+            const team2 = match.matchInfo.team2.teamName;
+
+            matches.push({
+              teams: `${team1} vs ${team2}`
+            });
+
+          });
+
+        }
+
+      });
+
+    });
+
+    return matches.slice(0,5);
 
   } catch (error) {
 
     console.log(error);
-    return "Score unavailable";
+    return [];
 
   }
+
 }
 
 // SMS Listener
 app.post("/sms_listener", async (req, res) => {
 
-  console.log("SMS Received:", req.body);
+  const msisdn = req.body.msisdn;
+  const message = (req.body.message || "").trim().toLowerCase();
 
-  const message = (req.body.message || "").toLowerCase().trim();
-
+  // Step 1 → show live matches
   if (message === "cricketscoreupdate") {
 
-    const score = await getLiveScore();
-    res.send(score);
+    const matches = await getLiveMatches();
 
-  } else {
+    userSessions[msisdn] = matches;
 
-    res.send("Send CRICKETSCOREUPDATE to get live cricket score");
+    let reply = "Live Matches\n";
+
+    matches.forEach((m, i) => {
+
+      reply += `${i + 1}. ${m.teams}\n`;
+
+    });
+
+    res.send(reply);
+
+  }
+
+  // Step 2 → user selects match
+  else if (!isNaN(message)) {
+
+    const index = parseInt(message) - 1;
+
+    const matches = userSessions[msisdn];
+
+    if (!matches || !matches[index]) {
+
+      res.send("Invalid option");
+
+    } else {
+
+      const match = matches[index];
+
+      res.send(`${match.teams}\nScore update coming soon`);
+
+    }
+
+  }
+
+  else {
+
+    res.send("Send CRICKETSCOREUPDATE to see live matches");
 
   }
 
@@ -61,28 +124,26 @@ app.post("/sms_listener", async (req, res) => {
 // USSD Listener
 app.post("/ussd_listener", (req, res) => {
 
-  res.send("1. Live Match\n2. Bangladesh Match\n3. IPL Match");
+  res.send("1. Live Cricket Score");
 
 });
 
 // Subscription Listener
 app.post("/sub_listener", (req, res) => {
 
-  console.log("Subscription Event:", req.body);
+  console.log("Subscription:", req.body);
   res.send("Subscription Successful");
 
 });
 
-// Root
+// Root test
 app.get("/", (req, res) => {
 
   res.send("BDapps Cricket Server Running");
 
 });
 
-// Render compatible port
-const PORT = process.env.PORT || 10000;
-
+// Start server
 app.listen(PORT, () => {
 
   console.log("Server running on port " + PORT);

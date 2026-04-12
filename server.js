@@ -1,6 +1,8 @@
 const express = require("express");
 const axios = require("axios");
 
+const config = require("./config.json");
+
 const app = express();
 
 app.use(express.json());
@@ -15,15 +17,14 @@ const API_URL = "https://api.cricapi.com/v1";
 
 let matches = [];
 let selectedMatch = null;
-let state = "menu";
 
 // =======================
 // FETCH MATCHES
 // =======================
 
-async function fetchMatches(type){
+async function fetchMatches(type) {
 
-  try{
+  try {
 
     const response = await axios.get(
       `${API_URL}/${type}?apikey=${API_KEY}&offset=0`
@@ -31,13 +32,13 @@ async function fetchMatches(type){
 
     const data = response.data;
 
-    if(!data || !data.data) return [];
+    if (!data || !data.data) return [];
 
     return data.data;
 
-  }catch(error){
+  } catch (error) {
 
-    console.log("API Error:",error.message);
+    console.log("API Error:", error.message);
     return [];
 
   }
@@ -45,20 +46,15 @@ async function fetchMatches(type){
 }
 
 // =======================
-// SCORE VIEW
+// SCORE FORMAT
 // =======================
 
-function getScore(match){
+function getScore(match) {
 
   const name = match.name || "Match";
   const status = match.status || "Score not available";
 
-  return `${name}
-
-${status}
-
-1. Refresh
-0. Back`;
+  return `${name}\r\n\r\n${status}\r\n\r\n${config.score_menu}`;
 
 }
 
@@ -66,81 +62,61 @@ ${status}
 // SMS LISTENER
 // =======================
 
-app.post("/sms_listener", async (req,res)=>{
+app.post("/sms_listener", async (req, res) => {
 
   const message = (req.body.message || "").toLowerCase().trim();
 
-  console.log("SMS:",message);
+  console.log("SMS:", message);
 
   // MAIN MENU
 
-  if(message === "cricketscoreupdate" || message === "0"){
+  if (message === config.app.shortcode) {
 
-    state = "menu";
-
-    let menu = "Cricket Matches\n\n";
-
-    menu += "1. Live Matches\n";
-    menu += "2. Upcoming Matches\n";
-    menu += "3. Recent Matches\n";
-
-    menu += "\n0. Back";
-
-    return res.send(menu);
+    return res.send(config.menu.main);
 
   }
 
   // LIVE MATCHES
 
-  if(message === "1" && state === "menu"){
+  if (message === "1") {
 
     matches = await fetchMatches("currentMatches");
-
-    state = "list";
 
   }
 
   // UPCOMING MATCHES
 
-  if(message === "2" && state === "menu"){
+  if (message === "2") {
 
     matches = await fetchMatches("matches");
-
-    state = "list";
 
   }
 
   // RECENT MATCHES
 
-  if(message === "3" && state === "menu"){
+  if (message === "3") {
 
     matches = await fetchMatches("matches");
 
-    state = "list";
-
   }
 
-  // SHOW MATCH LIST
+  if (["1","2","3"].includes(message)) {
 
-  if(state === "list"){
+    if (matches.length === 0) {
 
-    if(matches.length === 0){
-
-      return res.send("No matches available");
+      return res.send(config.menu.no_matches);
 
     }
 
-    let menu = "Matches\n\n";
+    let menu = `${config.menu.matches}\r\n\r\n`;
 
     matches.slice(0,3).forEach((match,index)=>{
 
-      menu += `${index+1}. ${match.name}\n`;
+      menu += `${index+1}. ${match.name}\r\n`;
 
     });
 
-    menu += "\n0. Back";
-
-    state = "select";
+    menu += "\r\n0. Back";
 
     return res.send(menu);
 
@@ -148,15 +124,13 @@ app.post("/sms_listener", async (req,res)=>{
 
   // SELECT MATCH
 
-  if(state === "select" && !isNaN(message)){
+  if (!isNaN(message)) {
 
-    const index = parseInt(message)-1;
+    const index = parseInt(message) - 1;
 
-    if(matches[index]){
+    if (matches[index]) {
 
       selectedMatch = matches[index];
-
-      state = "score";
 
       return res.send(getScore(selectedMatch));
 
@@ -164,15 +138,15 @@ app.post("/sms_listener", async (req,res)=>{
 
   }
 
-  // REFRESH SCORE
+  // REFRESH
 
-  if(message === "1" && state === "score"){
+  if (message === "1" && selectedMatch) {
 
     return res.send(getScore(selectedMatch));
 
   }
 
-  res.send("Send CRICKETSCOREUPDATE");
+  res.send(config.menu.default);
 
 });
 
@@ -208,7 +182,7 @@ app.get("/",(req,res)=>{
 
 // =======================
 
-const PORT = process.env.PORT || 10000;
+const PORT = process.env.PORT || config.server.port;
 
 app.listen(PORT,()=>{
 

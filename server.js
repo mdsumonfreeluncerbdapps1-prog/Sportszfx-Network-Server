@@ -6,9 +6,9 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// ==========================
+// =========================
 // RAPID API CONFIG
-// ==========================
+// =========================
 
 const API_KEY = "7fe9f425e3mshff1222adf5c4e45plfc57cjsrn3249e77b5bff";
 const API_HOST = "cricbuzz-official-apis.p.rapidapi.com";
@@ -16,20 +16,20 @@ const API_HOST = "cricbuzz-official-apis.p.rapidapi.com";
 let matches = [];
 let selectedMatch = null;
 
-// ==========================
+// =========================
 // FETCH MATCHES
-// ==========================
+// =========================
 
-async function fetchMatches(type) {
+async function fetchMatches(type){
 
-  try {
+  try{
 
     const response = await axios.get(
-      `https://${API_HOST}/${type}-matches`,
+      `https://${API_HOST}/matches/${type}`,
       {
-        headers: {
-          "X-RapidAPI-Key": API_KEY,
-          "X-RapidAPI-Host": API_HOST
+        headers:{
+          "X-RapidAPI-Key":API_KEY,
+          "X-RapidAPI-Host":API_HOST
         }
       }
     );
@@ -38,52 +38,72 @@ async function fetchMatches(type) {
 
     let list = [];
 
-    if (!data || !data.matches) return [];
+    if(!data || !data.typeMatches) return [];
 
-    data.matches.forEach(match => {
+    data.typeMatches.forEach(typeMatch=>{
 
-      list.push({
-        id: match.matchId,
-        team1: match.team1.name,
-        team2: match.team2.name
+      if(!typeMatch.seriesMatches) return;
+
+      typeMatch.seriesMatches.forEach(series=>{
+
+        if(!series.seriesAdWrapper) return;
+
+        const seriesMatches = series.seriesAdWrapper.matches;
+
+        if(!seriesMatches) return;
+
+        seriesMatches.forEach(match=>{
+
+          list.push({
+
+            id: match.matchInfo.matchId,
+
+            team1: match.matchInfo.team1.teamName,
+
+            team2: match.matchInfo.team2.teamName
+
+          });
+
+        });
+
       });
 
     });
 
     return list;
 
-  } catch (error) {
+  }catch(error){
 
-    console.log("API error:", error.message);
+    console.log("API Error:",error.message);
     return [];
 
   }
 
 }
 
-// ==========================
+// =========================
 // GET MATCHES
-// ==========================
+// =========================
 
-async function getMatches() {
+async function getMatches(){
 
   let list = await fetchMatches("live");
 
-  if (list.length > 0) {
+  if(list.length>0){
     console.log("Live matches found");
     return list;
   }
 
   list = await fetchMatches("upcoming");
 
-  if (list.length > 0) {
+  if(list.length>0){
     console.log("Upcoming matches found");
     return list;
   }
 
   list = await fetchMatches("recent");
 
-  if (list.length > 0) {
+  if(list.length>0){
     console.log("Recent matches found");
     return list;
   }
@@ -92,40 +112,48 @@ async function getMatches() {
 
 }
 
-// ==========================
+// =========================
 // GET SCORE
-// ==========================
+// =========================
 
-async function getScore(matchId) {
+async function getScore(matchId){
 
-  try {
+  try{
 
     const response = await axios.get(
-      `https://${API_HOST}/match/${matchId}`,
+      `https://${API_HOST}/mcenter/${matchId}`,
       {
-        headers: {
-          "X-RapidAPI-Key": API_KEY,
-          "X-RapidAPI-Host": API_HOST
+        headers:{
+          "X-RapidAPI-Key":API_KEY,
+          "X-RapidAPI-Host":API_HOST
         }
       }
     );
 
     const data = response.data;
 
-    const team1 = data.team1?.name || "Team A";
-    const team2 = data.team2?.name || "Team B";
+    const team1 = data.matchHeader?.team1?.name || "Team A";
+    const team2 = data.matchHeader?.team2?.name || "Team B";
 
-    const score = data.score || "Score not available";
+    const score = data.matchScore?.team1Score?.inngs1;
+
+    if(!score){
+
+      return `${team1} vs ${team2}
+Score not available`;
+
+    }
 
     return `${team1} vs ${team2}
-Score: ${score}
+Score: ${score.runs}/${score.wickets}
+Overs: ${score.overs}
 
 1. Refresh
 0. Back`;
 
-  } catch (error) {
+  }catch(error){
 
-    console.log("Score error:", error.message);
+    console.log("Score Error:",error.message);
 
     return "Score unavailable";
 
@@ -133,23 +161,21 @@ Score: ${score}
 
 }
 
-// ==========================
+// =========================
 // SMS LISTENER
-// ==========================
+// =========================
 
-app.post("/sms_listener", async (req, res) => {
+app.post("/sms_listener",async(req,res)=>{
 
   const message = (req.body.message || "").toLowerCase().trim();
 
-  console.log("SMS:", message);
+  console.log("SMS:",message);
 
-  // START COMMAND
-
-  if (message === "cricketscoreupdate") {
+  if(message === "cricketscoreupdate"){
 
     matches = await getMatches();
 
-    if (matches.length === 0) {
+    if(matches.length === 0){
 
       return res.send("No matches available");
 
@@ -169,9 +195,9 @@ app.post("/sms_listener", async (req, res) => {
 
   }
 
-  // REFRESH SCORE
+  // refresh
 
-  if (message === "1" && selectedMatch) {
+  if(message === "1" && selectedMatch){
 
     const score = await getScore(selectedMatch);
 
@@ -179,13 +205,13 @@ app.post("/sms_listener", async (req, res) => {
 
   }
 
-  // MATCH SELECT
+  // select match
 
-  if (!isNaN(message)) {
+  if(!isNaN(message)){
 
     const index = parseInt(message) - 1;
 
-    if (matches[index]) {
+    if(matches[index]){
 
       selectedMatch = matches[index].id;
 
@@ -197,13 +223,13 @@ app.post("/sms_listener", async (req, res) => {
 
   }
 
-  return res.send("Send CRICKETSCOREUPDATE");
+  res.send("Send CRICKETSCOREUPDATE");
 
 });
 
-// ==========================
-// USSD LISTENER
-// ==========================
+// =========================
+// USSD
+// =========================
 
 app.post("/ussd_listener",(req,res)=>{
 
@@ -211,9 +237,9 @@ app.post("/ussd_listener",(req,res)=>{
 
 });
 
-// ==========================
-// SUB LISTENER
-// ==========================
+// =========================
+// SUB
+// =========================
 
 app.post("/sub_listener",(req,res)=>{
 
@@ -221,9 +247,9 @@ app.post("/sub_listener",(req,res)=>{
 
 });
 
-// ==========================
+// =========================
 // ROOT
-// ==========================
+// =========================
 
 app.get("/",(req,res)=>{
 
@@ -231,9 +257,7 @@ app.get("/",(req,res)=>{
 
 });
 
-// ==========================
-// SERVER START
-// ==========================
+// =========================
 
 const PORT = process.env.PORT || 10000;
 

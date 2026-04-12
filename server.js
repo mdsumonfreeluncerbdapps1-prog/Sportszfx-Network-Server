@@ -10,62 +10,63 @@ app.use(express.urlencoded({ extended: true }));
 const API_KEY = "7fe9f425e3mshff1222adf5c4e45plfc57cjsrn3249e77b5bff";
 const API_HOST = "cricbuzz-cricket2.p.rapidapi.com";
 
-let liveMatches = [];
+let matches = [];
 let selectedMatch = null;
 
 // =====================
 // FETCH MATCHES
 // =====================
-async function fetchMatches(url) {
+async function fetchMatches(type) {
 
   try {
 
-    const response = await axios.get(url, {
-      headers: {
-        "X-RapidAPI-Key": API_KEY,
-        "X-RapidAPI-Host": API_HOST
+    const response = await axios.get(
+      `https://cricbuzz-cricket2.p.rapidapi.com/matches/v1/${type}`,
+      {
+        headers: {
+          "X-RapidAPI-Key": API_KEY,
+          "X-RapidAPI-Host": API_HOST
+        }
       }
-    });
+    );
 
     const data = response.data;
 
-    let matches = [];
+    let list = [];
 
-    if (data.typeMatches) {
+    if (!data.typeMatches) return [];
 
-      data.typeMatches.forEach(type => {
+    data.typeMatches.forEach(type => {
 
-        if (type.seriesMatches) {
+      if (!type.seriesMatches) return;
 
-          type.seriesMatches.forEach(series => {
+      type.seriesMatches.forEach(series => {
 
-            if (series.seriesAdWrapper && series.seriesAdWrapper.matches) {
+        if (!series.seriesAdWrapper) return;
 
-              series.seriesAdWrapper.matches.forEach(match => {
+        const seriesMatches = series.seriesAdWrapper.matches;
 
-                matches.push({
-                  id: match.matchInfo.matchId,
-                  team1: match.matchInfo.team1.teamName,
-                  team2: match.matchInfo.team2.teamName
-                });
+        if (!seriesMatches) return;
 
-              });
+        seriesMatches.forEach(match => {
 
-            }
-
+          list.push({
+            id: match.matchInfo.matchId,
+            team1: match.matchInfo.team1.teamName,
+            team2: match.matchInfo.team2.teamName
           });
 
-        }
+        });
 
       });
 
-    }
+    });
 
-    return matches;
+    return list;
 
   } catch (error) {
 
-    console.log("API ERROR:", error.message);
+    console.log("API error:", error.message);
     return [];
 
   }
@@ -73,34 +74,35 @@ async function fetchMatches(url) {
 }
 
 // =====================
-// GET MATCH LIST
+// GET MATCHES
 // =====================
 async function getMatches() {
 
-  // Step 1 → Live
-  let matches = await fetchMatches(
-    "https://cricbuzz-cricket2.p.rapidapi.com/matches/v1/live"
-  );
+  // Live
+  let list = await fetchMatches("live");
 
-  if (matches.length > 0) {
-    return matches;
+  if (list.length > 0) {
+    console.log("Live matches found");
+    return list;
   }
 
-  // Step 2 → Upcoming
-  matches = await fetchMatches(
-    "https://cricbuzz-cricket2.p.rapidapi.com/matches/v1/upcoming"
-  );
+  // Upcoming
+  list = await fetchMatches("upcoming");
 
-  if (matches.length > 0) {
-    return matches;
+  if (list.length > 0) {
+    console.log("Upcoming matches found");
+    return list;
   }
 
-  // Step 3 → Recent
-  matches = await fetchMatches(
-    "https://cricbuzz-cricket2.p.rapidapi.com/matches/v1/recent"
-  );
+  // Recent
+  list = await fetchMatches("recent");
 
-  return matches;
+  if (list.length > 0) {
+    console.log("Recent matches found");
+    return list;
+  }
+
+  return [];
 
 }
 
@@ -126,30 +128,25 @@ async function getScore(matchId) {
     const team1 = data.matchHeader?.team1?.name || "Team A";
     const team2 = data.matchHeader?.team2?.name || "Team B";
 
-    const scoreData = data.matchScore?.team1Score?.inngs1;
+    const score = data.matchScore?.team1Score?.inngs1;
 
-    if (!scoreData) {
+    if (!score) {
 
       return `${team1} vs ${team2}
 Score not available`;
 
     }
 
-    const runs = scoreData.runs;
-    const wickets = scoreData.wickets;
-    const overs = scoreData.overs;
-
     return `${team1} vs ${team2}
-Score: ${runs}/${wickets}
-Over: ${overs}
+Score: ${score.runs}/${score.wickets}
+Over: ${score.overs}
 
 1. Refresh
 0. Back`;
 
   } catch (error) {
 
-    console.log("Score Error:", error.message);
-
+    console.log("Score error:", error.message);
     return "Score unavailable";
 
   }
@@ -167,15 +164,15 @@ app.post("/sms_listener", async (req, res) => {
 
   if (message === "cricketscoreupdate") {
 
-    liveMatches = await getMatches();
+    matches = await getMatches();
 
-    if (liveMatches.length === 0) {
-      return res.send("No matches available right now");
+    if (matches.length === 0) {
+      return res.send("No matches found");
     }
 
     let menu = "Matches\n";
 
-    liveMatches.slice(0,3).forEach((match,index)=>{
+    matches.slice(0,3).forEach((match, index) => {
 
       menu += `${index+1}. ${match.team1} vs ${match.team2}\n`;
 
@@ -191,18 +188,19 @@ app.post("/sms_listener", async (req, res) => {
   if (message === "1" && selectedMatch) {
 
     const score = await getScore(selectedMatch);
+
     return res.send(score);
 
   }
 
-  // Match select
+  // Select match
   if (!isNaN(message)) {
 
     const index = parseInt(message) - 1;
 
-    if (liveMatches[index]) {
+    if (matches[index]) {
 
-      selectedMatch = liveMatches[index].id;
+      selectedMatch = matches[index].id;
 
       const score = await getScore(selectedMatch);
 
@@ -212,14 +210,14 @@ app.post("/sms_listener", async (req, res) => {
 
   }
 
-  res.send("Send CRICKETSCOREUPDATE for cricket matches");
+  res.send("Send CRICKETSCOREUPDATE");
 
 });
 
 // =====================
 // USSD
 // =====================
-app.post("/ussd_listener",(req,res)=>{
+app.post("/ussd_listener", (req,res)=>{
 
   res.send("Cricket Live Score Service");
 
@@ -237,7 +235,7 @@ app.post("/sub_listener",(req,res)=>{
 // =====================
 // ROOT
 // =====================
-app.get("/",(req,res)=>{
+app.get("/", (req,res)=>{
 
   res.send("BDapps Cricket Server Running");
 
@@ -246,8 +244,8 @@ app.get("/",(req,res)=>{
 // =====================
 const PORT = process.env.PORT || 10000;
 
-app.listen(PORT,()=>{
+app.listen(PORT, ()=>{
 
-  console.log("Server running on port",PORT);
+  console.log("Server running on port", PORT);
 
 });

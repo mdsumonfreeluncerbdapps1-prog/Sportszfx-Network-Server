@@ -80,15 +80,15 @@ async function getScore(matchId) {
 
   try {
 
-    const response = await axios.get(
-      https://cricbuzz-cricket2.p.rapidapi.com/mcenter/v1/${matchId},
-      {
-        headers: {
-          "X-RapidAPI-Key": API_KEY,
-          "X-RapidAPI-Host": API_HOST
-        }
-      }
-    );
+  const response = await axios.get(
+  https://cricbuzz-cricket2.p.rapidapi.com/mcenter/v1/${matchId},
+  {
+    headers: {
+      "X-RapidAPI-Key": API_KEY,
+      "X-RapidAPI-Host": API_HOST
+    }
+  }
+);
 
     const data = response.data;
 

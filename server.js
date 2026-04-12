@@ -20,16 +20,16 @@ let selectedMatch = null;
 // FETCH MATCHES
 // =========================
 
-async function fetchMatches(type){
+async function fetchMatches(type) {
 
-  try{
+  try {
 
     const response = await axios.get(
       `https://${API_HOST}/matches/${type}`,
       {
-        headers:{
-          "X-RapidAPI-Key":API_KEY,
-          "X-RapidAPI-Host":API_HOST
+        headers: {
+          "X-RapidAPI-Key": API_KEY,
+          "X-RapidAPI-Host": API_HOST
         }
       }
     );
@@ -38,29 +38,32 @@ async function fetchMatches(type){
 
     let list = [];
 
-    if(!data || !data.typeMatches) return [];
+    if (!data || !data.typeMatches) return [];
 
-    data.typeMatches.forEach(typeMatch=>{
+    data.typeMatches.forEach(typeMatch => {
 
-      if(!typeMatch.seriesMatches) return;
+      if (!typeMatch.seriesMatches) return;
 
-      typeMatch.seriesMatches.forEach(series=>{
+      typeMatch.seriesMatches.forEach(series => {
 
-        if(!series.seriesAdWrapper) return;
+        // Skip ads
+        if (!series.seriesAdWrapper) return;
 
         const seriesMatches = series.seriesAdWrapper.matches;
 
-        if(!seriesMatches) return;
+        if (!seriesMatches) return;
 
-        seriesMatches.forEach(match=>{
+        seriesMatches.forEach(match => {
+
+          if (!match.matchInfo) return;
 
           list.push({
 
             id: match.matchInfo.matchId,
 
-            team1: match.matchInfo.team1.teamName,
+            team1: match.matchInfo.team1?.teamName || "Team A",
 
-            team2: match.matchInfo.team2.teamName
+            team2: match.matchInfo.team2?.teamName || "Team B"
 
           });
 
@@ -72,9 +75,10 @@ async function fetchMatches(type){
 
     return list;
 
-  }catch(error){
+  } catch (error) {
 
-    console.log("API Error:",error.message);
+    console.log("API Error:", error.message);
+
     return [];
 
   }
@@ -85,25 +89,25 @@ async function fetchMatches(type){
 // GET MATCHES
 // =========================
 
-async function getMatches(){
+async function getMatches() {
 
   let list = await fetchMatches("live");
 
-  if(list.length>0){
+  if (list.length > 0) {
     console.log("Live matches found");
     return list;
   }
 
   list = await fetchMatches("upcoming");
 
-  if(list.length>0){
+  if (list.length > 0) {
     console.log("Upcoming matches found");
     return list;
   }
 
   list = await fetchMatches("recent");
 
-  if(list.length>0){
+  if (list.length > 0) {
     console.log("Recent matches found");
     return list;
   }
@@ -116,16 +120,16 @@ async function getMatches(){
 // GET SCORE
 // =========================
 
-async function getScore(matchId){
+async function getScore(matchId) {
 
-  try{
+  try {
 
     const response = await axios.get(
       `https://${API_HOST}/mcenter/${matchId}`,
       {
-        headers:{
-          "X-RapidAPI-Key":API_KEY,
-          "X-RapidAPI-Host":API_HOST
+        headers: {
+          "X-RapidAPI-Key": API_KEY,
+          "X-RapidAPI-Host": API_HOST
         }
       }
     );
@@ -137,7 +141,7 @@ async function getScore(matchId){
 
     const score = data.matchScore?.team1Score?.inngs1;
 
-    if(!score){
+    if (!score) {
 
       return `${team1} vs ${team2}
 Score not available`;
@@ -151,9 +155,9 @@ Overs: ${score.overs}
 1. Refresh
 0. Back`;
 
-  }catch(error){
+  } catch (error) {
 
-    console.log("Score Error:",error.message);
+    console.log("Score Error:", error.message);
 
     return "Score unavailable";
 
@@ -165,27 +169,29 @@ Overs: ${score.overs}
 // SMS LISTENER
 // =========================
 
-app.post("/sms_listener",async(req,res)=>{
+app.post("/sms_listener", async (req, res) => {
 
   const message = (req.body.message || "").toLowerCase().trim();
 
-  console.log("SMS:",message);
+  console.log("SMS:", message);
 
-  if(message === "cricketscoreupdate"){
+  // Start command
+
+  if (message === "cricketscoreupdate") {
 
     matches = await getMatches();
 
-    if(matches.length === 0){
+    if (matches.length === 0) {
 
       return res.send("No matches available");
 
     }
 
-    let menu = "Live Matches\n\n";
+    let menu = "Matches\n\n";
 
-    matches.slice(0,3).forEach((match,index)=>{
+    matches.slice(0, 3).forEach((match, index) => {
 
-      menu += `${index+1}. ${match.team1} vs ${match.team2}\n`;
+      menu += `${index + 1}. ${match.team1} vs ${match.team2}\n`;
 
     });
 
@@ -195,9 +201,9 @@ app.post("/sms_listener",async(req,res)=>{
 
   }
 
-  // refresh
+  // Refresh score
 
-  if(message === "1" && selectedMatch){
+  if (message === "1" && selectedMatch) {
 
     const score = await getScore(selectedMatch);
 
@@ -205,13 +211,13 @@ app.post("/sms_listener",async(req,res)=>{
 
   }
 
-  // select match
+  // Select match
 
-  if(!isNaN(message)){
+  if (!isNaN(message)) {
 
     const index = parseInt(message) - 1;
 
-    if(matches[index]){
+    if (matches[index]) {
 
       selectedMatch = matches[index].id;
 
@@ -231,7 +237,7 @@ app.post("/sms_listener",async(req,res)=>{
 // USSD
 // =========================
 
-app.post("/ussd_listener",(req,res)=>{
+app.post("/ussd_listener", (req, res) => {
 
   res.send("Cricket Live Score Service");
 
@@ -241,7 +247,7 @@ app.post("/ussd_listener",(req,res)=>{
 // SUB
 // =========================
 
-app.post("/sub_listener",(req,res)=>{
+app.post("/sub_listener", (req, res) => {
 
   res.send("Subscription Successful");
 
@@ -251,18 +257,20 @@ app.post("/sub_listener",(req,res)=>{
 // ROOT
 // =========================
 
-app.get("/",(req,res)=>{
+app.get("/", (req, res) => {
 
   res.send("BDapps Cricket Server Running");
 
 });
 
 // =========================
+// SERVER
+// =========================
 
 const PORT = process.env.PORT || 10000;
 
-app.listen(PORT,()=>{
+app.listen(PORT, () => {
 
-  console.log("Server running on port",PORT);
+  console.log("Server running on port", PORT);
 
 });

@@ -8,7 +8,7 @@ app.use(express.urlencoded({ extended: true }));
 
 // RapidAPI
 const API_KEY = "7fe9f425e3mshff1222adf5c4e45plfc57cjsrn3249e77b5bff";
-const API_HOST = "cricbuzz-cricket2.p.rapidapi.com";
+const API_HOST = "cricbuzz-official-apis.p.rapidapi.com";
 
 let matches = [];
 let selectedMatch = null;
@@ -21,7 +21,7 @@ async function fetchMatches(type) {
   try {
 
     const response = await axios.get(
-      `https://cricbuzz-cricket2.p.rapidapi.com/matches/v1/${type}`,
+      `https://cricbuzz-official-apis.p.rapidapi.com/matches/${type}`,
       {
         headers: {
           "X-RapidAPI-Key": API_KEY,
@@ -34,30 +34,14 @@ async function fetchMatches(type) {
 
     let list = [];
 
-    if (!data.typeMatches) return [];
+    if (!data || !data.matches) return [];
 
-    data.typeMatches.forEach(type => {
+    data.matches.forEach(match => {
 
-      if (!type.seriesMatches) return;
-
-      type.seriesMatches.forEach(series => {
-
-        if (!series.seriesAdWrapper) return;
-
-        const seriesMatches = series.seriesAdWrapper.matches;
-
-        if (!seriesMatches) return;
-
-        seriesMatches.forEach(match => {
-
-          list.push({
-            id: match.matchInfo.matchId,
-            team1: match.matchInfo.team1.teamName,
-            team2: match.matchInfo.team2.teamName
-          });
-
-        });
-
+      list.push({
+        id: match.matchId,
+        team1: match.team1,
+        team2: match.team2
       });
 
     });
@@ -78,7 +62,6 @@ async function fetchMatches(type) {
 // =====================
 async function getMatches() {
 
-  // Live
   let list = await fetchMatches("live");
 
   if (list.length > 0) {
@@ -86,7 +69,6 @@ async function getMatches() {
     return list;
   }
 
-  // Upcoming
   list = await fetchMatches("upcoming");
 
   if (list.length > 0) {
@@ -94,7 +76,6 @@ async function getMatches() {
     return list;
   }
 
-  // Recent
   list = await fetchMatches("recent");
 
   if (list.length > 0) {
@@ -114,7 +95,7 @@ async function getScore(matchId) {
   try {
 
     const response = await axios.get(
-      `https://cricbuzz-cricket2.p.rapidapi.com/mcenter/v1/${matchId}`,
+      `https://cricbuzz-official-apis.p.rapidapi.com/match/${matchId}`,
       {
         headers: {
           "X-RapidAPI-Key": API_KEY,
@@ -125,21 +106,12 @@ async function getScore(matchId) {
 
     const data = response.data;
 
-    const team1 = data.matchHeader?.team1?.name || "Team A";
-    const team2 = data.matchHeader?.team2?.name || "Team B";
-
-    const score = data.matchScore?.team1Score?.inngs1;
-
-    if (!score) {
-
-      return `${team1} vs ${team2}
-Score not available`;
-
-    }
+    const team1 = data.team1 || "Team A";
+    const team2 = data.team2 || "Team B";
+    const score = data.score || "Score unavailable";
 
     return `${team1} vs ${team2}
-Score: ${score.runs}/${score.wickets}
-Over: ${score.overs}
+Score: ${score}
 
 1. Refresh
 0. Back`;
@@ -178,13 +150,13 @@ app.post("/sms_listener", async (req, res) => {
 
     });
 
-    menu += "0. More Match\n00. Back";
+    menu += "0. Back";
 
     return res.send(menu);
 
   }
 
-  // Refresh
+  // Refresh score
   if (message === "1" && selectedMatch) {
 
     const score = await getScore(selectedMatch);

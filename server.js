@@ -10,12 +10,11 @@ app.use(express.urlencoded({ extended: true }));
 const API_KEY = "7fe9f425e3mshff1222adf5c4e45plfc57cjsrn3249e77b5bff";
 const API_HOST = "cricbuzz-cricket2.p.rapidapi.com";
 
-// store matches
 let liveMatches = [];
 let selectedMatch = null;
 
 // =====================
-// Get Live Matches
+// GET LIVE MATCHES
 // =====================
 async function getMatches() {
 
@@ -67,28 +66,28 @@ async function getMatches() {
 
   } catch (error) {
 
-    console.log("API Error:", error.message);
+    console.log("API ERROR:", error.message);
 
   }
 
 }
 
 // =====================
-// Get Score
+// GET SCORE
 // =====================
 async function getScore(matchId) {
 
   try {
 
-const response = await axios.get(
-  `https://cricbuzz-cricket2.p.rapidapi.com/mcenter/v1/${matchId},
-  {
-    headers: {
-      "X-RapidAPI-Key": API_KEY,
-      "X-RapidAPI-Host": API_HOST
-    }
-  }
-);
+    const response = await axios.get(
+      `https://cricbuzz-cricket2.p.rapidapi.com/mcenter/v1/${matchId}`,
+      {
+        headers: {
+          "X-RapidAPI-Key": API_KEY,
+          "X-RapidAPI-Host": API_HOST
+        }
+      }
+    );
 
     const data = response.data;
 
@@ -98,7 +97,7 @@ const response = await axios.get(
     const scoreData = data.matchScore?.team1Score?.inngs1;
 
     if (!scoreData) {
-      return ${team1} vs ${team2}\nScore not available;
+      return `${team1} vs ${team2}\nScore not available`;
     }
 
     const runs = scoreData.runs;
@@ -131,7 +130,6 @@ app.post("/sms_listener", async (req, res) => {
 
   console.log("SMS:", message);
 
-  // show matches
   if (message === "cricketscoreupdate") {
 
     await getMatches();
@@ -140,7 +138,7 @@ app.post("/sms_listener", async (req, res) => {
 
     liveMatches.slice(0,3).forEach((match,index) => {
 
-      menu += ${index+1}. ${match.team1} vs ${match.team2}\n;
+      menu += `${index + 1}. ${match.team1} vs ${match.team2}\n`;
 
     });
 
@@ -150,7 +148,6 @@ app.post("/sms_listener", async (req, res) => {
 
   }
 
-  // refresh score
   if (message === "1" && selectedMatch) {
 
     const score = await getScore(selectedMatch);
@@ -159,7 +156,6 @@ app.post("/sms_listener", async (req, res) => {
 
   }
 
-  // select match
   if (!isNaN(message)) {
 
     const index = parseInt(message) - 1;
@@ -176,7 +172,7 @@ app.post("/sms_listener", async (req, res) => {
 
   }
 
-  res.send("Send CRICKETSCOREUPDATE for live matches");
+  res.send("Send CRICKETSCOREUPDATE to see live matches");
 
 });
 
@@ -190,7 +186,7 @@ app.post("/ussd_listener",(req,res)=>{
 });
 
 // =====================
-// SUBSCRIPTION
+// SUB
 // =====================
 app.post("/sub_listener",(req,res)=>{
 

@@ -15,7 +15,7 @@ const API_URL = "https://api.cricapi.com/v1";
 
 let matches = [];
 let selectedMatch = null;
-let currentType = "";
+let state = "menu";
 
 // =======================
 // FETCH MATCHES
@@ -45,7 +45,7 @@ async function fetchMatches(type){
 }
 
 // =======================
-// GET SCORE
+// SCORE VIEW
 // =======================
 
 function getScore(match){
@@ -74,7 +74,9 @@ app.post("/sms_listener", async (req,res)=>{
 
   // MAIN MENU
 
-  if(message === "cricketscoreupdate"){
+  if(message === "cricketscoreupdate" || message === "0"){
+
+    state = "menu";
 
     let menu = "Cricket Matches\n\n";
 
@@ -88,37 +90,39 @@ app.post("/sms_listener", async (req,res)=>{
 
   }
 
-  // LIVE
+  // LIVE MATCHES
 
-  if(message === "1"){
-
-    currentType = "currentMatches";
+  if(message === "1" && state === "menu"){
 
     matches = await fetchMatches("currentMatches");
 
+    state = "list";
+
   }
 
-  // UPCOMING
+  // UPCOMING MATCHES
 
-  if(message === "2"){
-
-    currentType = "matches";
+  if(message === "2" && state === "menu"){
 
     matches = await fetchMatches("matches");
 
+    state = "list";
+
   }
 
-  // RECENT
+  // RECENT MATCHES
 
-  if(message === "3"){
-
-    currentType = "matches";
+  if(message === "3" && state === "menu"){
 
     matches = await fetchMatches("matches");
 
+    state = "list";
+
   }
 
-  if(["1","2","3"].includes(message)){
+  // SHOW MATCH LIST
+
+  if(state === "list"){
 
     if(matches.length === 0){
 
@@ -136,13 +140,15 @@ app.post("/sms_listener", async (req,res)=>{
 
     menu += "\n0. Back";
 
+    state = "select";
+
     return res.send(menu);
 
   }
 
   // SELECT MATCH
 
-  if(!isNaN(message)){
+  if(state === "select" && !isNaN(message)){
 
     const index = parseInt(message)-1;
 
@@ -150,15 +156,17 @@ app.post("/sms_listener", async (req,res)=>{
 
       selectedMatch = matches[index];
 
+      state = "score";
+
       return res.send(getScore(selectedMatch));
 
     }
 
   }
 
-  // REFRESH
+  // REFRESH SCORE
 
-  if(message === "1" && selectedMatch){
+  if(message === "1" && state === "score"){
 
     return res.send(getScore(selectedMatch));
 

@@ -7,7 +7,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // RapidAPI
-const API_KEY = "YOUR_RAPIDAPI_KEY";
+const API_KEY = "7fe9f425e3mshff1222adf5c4e45plfc57cjsrn3249e77b5bff";
 const API_HOST = "cricbuzz-cricket2.p.rapidapi.com";
 
 // store matches
@@ -92,19 +92,29 @@ async function getScore(matchId) {
 
     const data = response.data;
 
-    const team1 = data.matchHeader.team1.name;
-    const team2 = data.matchHeader.team2.name;
+    const team1 = data.matchHeader?.team1?.name || "Team A";
+    const team2 = data.matchHeader?.team2?.name || "Team B";
 
-    const score = data.matchScore.team1Score.inngs1;
+    const scoreData = data.matchScore?.team1Score?.inngs1;
+
+    if (!scoreData) {
+      return ${team1} vs ${team2}\nScore not available;
+    }
+
+    const runs = scoreData.runs;
+    const wickets = scoreData.wickets;
+    const overs = scoreData.overs;
 
     return `${team1} vs ${team2}
-Score: ${score.runs}/${score.wickets}
-Over: ${score.overs}
+Score: ${runs}/${wickets}
+Over: ${overs}
 
 1. Refresh
 0. Back`;
 
   } catch (error) {
+
+    console.log("Score Error:", error.message);
 
     return "Score unavailable";
 
@@ -140,6 +150,15 @@ app.post("/sms_listener", async (req, res) => {
 
   }
 
+  // refresh score
+  if (message === "1" && selectedMatch) {
+
+    const score = await getScore(selectedMatch);
+
+    return res.send(score);
+
+  }
+
   // select match
   if (!isNaN(message)) {
 
@@ -157,15 +176,6 @@ app.post("/sms_listener", async (req, res) => {
 
   }
 
-  // refresh
-  if (message === "1" && selectedMatch) {
-
-    const score = await getScore(selectedMatch);
-
-    return res.send(score);
-
-  }
-
   res.send("Send CRICKETSCOREUPDATE for live matches");
 
 });
@@ -173,7 +183,7 @@ app.post("/sms_listener", async (req, res) => {
 // =====================
 // USSD
 // =====================
-app.post("/ussd_listener", (req,res)=>{
+app.post("/ussd_listener",(req,res)=>{
 
   res.send("Cricket Live Score Service");
 
@@ -200,7 +210,7 @@ app.get("/",(req,res)=>{
 // =====================
 const PORT = process.env.PORT || 10000;
 
-app.listen(PORT, ()=>{
+app.listen(PORT,()=>{
 
   console.log("Server running on port",PORT);
 

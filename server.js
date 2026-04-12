@@ -6,48 +6,49 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// =========================
+// =======================
 // API CONFIG
-// =========================
+// =======================
 
 const API_KEY = "a0a5a7d4-f83a-4cb6-ae97-91238413ec8c";
 const API_URL = "https://api.cricapi.com/v1";
 
 let matches = [];
 let selectedMatch = null;
+let currentType = "";
 
-// =========================
-// GET LIVE MATCHES
-// =========================
+// =======================
+// FETCH MATCHES
+// =======================
 
-async function getMatches() {
+async function fetchMatches(type){
 
-  try {
+  try{
 
     const response = await axios.get(
-      `${API_URL}/currentMatches?apikey=${API_KEY}&offset=0`
+      `${API_URL}/${type}?apikey=${API_KEY}&offset=0`
     );
 
     const data = response.data;
 
-    if (!data || !data.data) return [];
+    if(!data || !data.data) return [];
 
     return data.data;
 
-  } catch (error) {
+  }catch(error){
 
-    console.log("API Error:", error.message);
+    console.log("API Error:",error.message);
     return [];
 
   }
 
 }
 
-// =========================
+// =======================
 // GET SCORE
-// =========================
+// =======================
 
-function getScore(match) {
+function getScore(match){
 
   const name = match.name || "Match";
   const status = match.status || "Score not available";
@@ -61,32 +62,75 @@ ${status}
 
 }
 
-// =========================
+// =======================
 // SMS LISTENER
-// =========================
+// =======================
 
-app.post("/sms_listener", async (req, res) => {
+app.post("/sms_listener", async (req,res)=>{
 
   const message = (req.body.message || "").toLowerCase().trim();
 
-  console.log("SMS:", message);
+  console.log("SMS:",message);
 
-  // Start command
-  if (message === "cricketscoreupdate") {
+  // MAIN MENU
 
-    matches = await getMatches();
+  if(message === "cricketscoreupdate"){
 
-    if (matches.length === 0) {
+    let menu = "Cricket Matches\n\n";
 
-      return res.send("No live matches right now");
+    menu += "1. Live Matches\n";
+    menu += "2. Upcoming Matches\n";
+    menu += "3. Recent Matches\n";
+
+    menu += "\n0. Back";
+
+    return res.send(menu);
+
+  }
+
+  // LIVE
+
+  if(message === "1"){
+
+    currentType = "currentMatches";
+
+    matches = await fetchMatches("currentMatches");
+
+  }
+
+  // UPCOMING
+
+  if(message === "2"){
+
+    currentType = "matches";
+
+    matches = await fetchMatches("matches");
+
+  }
+
+  // RECENT
+
+  if(message === "3"){
+
+    currentType = "matches";
+
+    matches = await fetchMatches("matches");
+
+  }
+
+  if(["1","2","3"].includes(message)){
+
+    if(matches.length === 0){
+
+      return res.send("No matches available");
 
     }
 
-    let menu = "Live Cricket Matches\n\n";
+    let menu = "Matches\n\n";
 
-    matches.slice(0, 3).forEach((match, index) => {
+    matches.slice(0,3).forEach((match,index)=>{
 
-      menu += `${index + 1}. ${match.name}\n`;
+      menu += `${index+1}. ${match.name}\n`;
 
     });
 
@@ -96,19 +140,13 @@ app.post("/sms_listener", async (req, res) => {
 
   }
 
-  // Refresh score
-  if (message === "1" && selectedMatch) {
+  // SELECT MATCH
 
-    return res.send(getScore(selectedMatch));
+  if(!isNaN(message)){
 
-  }
+    const index = parseInt(message)-1;
 
-  // Select match
-  if (!isNaN(message)) {
-
-    const index = parseInt(message) - 1;
-
-    if (matches[index]) {
+    if(matches[index]){
 
       selectedMatch = matches[index];
 
@@ -118,46 +156,54 @@ app.post("/sms_listener", async (req, res) => {
 
   }
 
+  // REFRESH
+
+  if(message === "1" && selectedMatch){
+
+    return res.send(getScore(selectedMatch));
+
+  }
+
   res.send("Send CRICKETSCOREUPDATE");
 
 });
 
-// =========================
-// USSD LISTENER
-// =========================
+// =======================
+// USSD
+// =======================
 
-app.post("/ussd_listener", (req, res) => {
+app.post("/ussd_listener",(req,res)=>{
 
   res.send("Cricket Live Score Service");
 
 });
 
-// =========================
-// SUB LISTENER
-// =========================
+// =======================
+// SUB
+// =======================
 
-app.post("/sub_listener", (req, res) => {
+app.post("/sub_listener",(req,res)=>{
 
   res.send("Subscription Successful");
 
 });
 
-// =========================
+// =======================
 // ROOT
-// =========================
+// =======================
 
-app.get("/", (req, res) => {
+app.get("/",(req,res)=>{
 
   res.send("BDapps Cricket Server Running");
 
 });
 
-// =========================
+// =======================
 
 const PORT = process.env.PORT || 10000;
 
-app.listen(PORT, () => {
+app.listen(PORT,()=>{
 
-  console.log("Server running on port", PORT);
+  console.log("Server running on port",PORT);
 
 });

@@ -6,9 +6,8 @@
 
   "menu": {
     "main": "Cricket Matches\r\n\r\n1. Live Matches\r\n2. Upcoming Matches\r\n3. Recent Matches\r\n\r\n0. Back",
-
+    "matches": "Matches",
     "no_matches": "No matches available",
-
     "default": "Send CRICKETSCOREUPDATE"
   },
 

@@ -1,7 +1,6 @@
 {
-  "name": "bdapps-cricket-server",
+  "name": "cricket-sms-server",
   "version": "1.0.0",
-  "description": "BDapps Cricket Live Score Server",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"

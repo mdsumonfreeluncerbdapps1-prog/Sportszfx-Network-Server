@@ -6,17 +6,17 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-const PORT = process.env.PORT || 10000;
-
+// RapidAPI Config
 const API_KEY = "7fe9f425e3mshff1222adf5c4e45plfc57cjsrn3249e77b5bff";
 const API_HOST = "cricbuzz-cricket2.p.rapidapi.com";
 
-let matchList = [];
-let selectedMatch = {};
+// Store matches
+let liveMatches = [];
 
-
-// Get Match Menu
-async function getMatchMenu() {
+// ===============================
+// Get Live Matches From Cricbuzz
+// ===============================
+async function getLiveMatches() {
 
   try {
 
@@ -30,55 +30,43 @@ async function getMatchMenu() {
       }
     );
 
-    const data = response.data;
+    const matches = response.data.typeMatches[0].seriesMatches;
 
-    let menu = "Live Matches\n";
+    liveMatches = [];
 
-    matchList = [];
+    matches.forEach(series => {
 
-    const matches = data.typeMatches[0].seriesMatches;
+      if (series.seriesAdWrapper && series.seriesAdWrapper.matches) {
 
-    let count = 1;
+        series.seriesAdWrapper.matches.forEach(match => {
 
-    for (let i = 0; i < matches.length; i++) {
+          const team1 = match.matchInfo.team1.teamName;
+          const team2 = match.matchInfo.team2.teamName;
 
-      if (matches[i].seriesAdWrapper) {
+          liveMatches.push({
+            id: match.matchInfo.matchId,
+            team1: team1,
+            team2: team2
+          });
 
-        const match = matches[i].seriesAdWrapper.matches[0];
-
-        const team1 = match.matchInfo.team1.teamName;
-        const team2 = match.matchInfo.team2.teamName;
-        const matchId = match.matchInfo.matchId;
-
-        matchList.push(matchId);
-
-        menu += ${count}. ${team1} vs ${team2}\n;
-
-        count++;
-
-        if (count > 3) break;
+        });
 
       }
 
-    }
-
-    menu += "0. More Match\n00. Back";
-
-    return menu;
+    });
 
   } catch (error) {
 
-    console.log(error);
-
-    return "Live matches unavailable";
+    console.log("API Error:", error.message);
 
   }
 
 }
 
-
+// ===============================
 // Get Match Score
-async function getScore(matchId) {
+// ===============================
+async function getMatchScore(matchId) {
 
   try {
 
@@ -92,24 +80,23 @@ async function getScore(matchId) {
       }
     );
 
-    const data = response.data;
+    const score = response.data.matchScore;
 
-    const team1 = data.matchHeader.team1.name;
-    const team2 = data.matchHeader.team2.name;
+    const team1 = response.data.matchHeader.team1.name;
+    const team2 = response.data.matchHeader.team2.name;
 
-    const score = data.scoreCard[0].scoreDetails;
-
-    const runs = score.runs;
-    const wickets = score.wickets;
-    const overs = score.overs;
+    const runs = score.team1Score.inngs1.runs;
+    const wickets = score.team1Score.inngs1.wickets;
+    const overs = score.team1Score.inngs1.overs;
 
     return `${team1} vs ${team2}
 Score: ${runs}/${wickets}
-Over: ${overs}`;
+Over: ${overs}
+
+1. Refresh
+0. Back`;
 
   } catch (error) {
-
-    console.log(error);
 
     return "Score unavailable";
 
@@ -117,83 +104,95 @@ Over: ${overs}`;
 
 }
 
-
+// ===============================
 // SMS Listener
+// ===============================
 app.post("/sms_listener", async (req, res) => {
 
-  const msisdn = req.body.msisdn || "user";
-  const message = (req.body.message || "").toUpperCase().trim();
+  const message = (req.body.message || "").toLowerCase().trim();
 
-  // Show Match Menu
-  if (message === "CRICKETSCOREUPDATE") {
+  console.log("SMS:", message);
 
-    const menu = await getMatchMenu();
+  // Show Live Matches
+  if (message === "cricketscoreupdate") {
 
-    res.send(menu);
+    await getLiveMatches();
+
+    let menu = "Live Matches\n";
+
+    let count = 1;
+
+    liveMatches.slice(0,3).forEach(match => {
+
+      menu += ${count}. ${match.team1} vs ${match.team2}\n;
+
+      count++;
+
+    });
+
+    menu += "0. More Match\n00. Back";
+
+    return res.send(menu);
 
   }
 
-  // Select Match
-  else if (message === "1" || message === "2" || message === "3") {
+  // Match Selection
+  if (!isNaN(message)) {
 
     const index = parseInt(message) - 1;
 
-    const matchId = matchList[index];
+    if (liveMatches[index]) {
 
-    selectedMatch[msisdn] = matchId;
+      const matchId = liveMatches[index].id;
 
-    const score = await getScore(matchId);
+      const score = await getMatchScore(matchId);
 
-    res.send(`${score}
+      return res.send(score);
 
-1. Refresh
-0. Back`);
-
-  }
-
-  // Refresh Score
-  else if (message === "1" && selectedMatch[msisdn]) {
-
-    const matchId = selectedMatch[msisdn];
-
-    const score = await getScore(matchId);
-
-    res.send(`${score}
-
-1. Refresh
-0. Back`);
+    }
 
   }
 
-  // Back to Menu
-  else if (message === "0") {
-
-    const menu = await getMatchMenu();
-
-    res.send(menu);
-
-  }
-
-  else {
-
-    res.send("Send CRICKETSCOREUPDATE");
-
-  }
+  res.send("Send CRICKETSCOREUPDATE to see live cricket matches");
 
 });
 
+// ===============================
+// USSD Listener
+// ===============================
+app.post("/ussd_listener", (req, res) => {
 
+  res.send("Cricket Live Score Service");
+
+});
+
+// ===============================
+// Subscription Listener
+// ===============================
+app.post("/sub_listener", (req, res) => {
+
+  console.log("Subscription:", req.body);
+
+  res.send("Subscription Successful");
+
+});
+
+// ===============================
 // Root
+// ===============================
 app.get("/", (req, res) => {
 
   res.send("Sportzfx Cricket Server Running");
 
 });
 
-
+// ===============================
 // Start Server
+// ===============================
+const PORT = process.env.PORT || 10000;
+
 app.listen(PORT, () => {
 
-  console.log("Server running on port " + PORT);
+  console.log(Server running on port ${PORT});
 
 });

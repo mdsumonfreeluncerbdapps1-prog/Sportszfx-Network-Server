@@ -1,0 +1,20 @@
+{
+  "app": {
+    "name": "Sportzfx NK",
+    "shortcode": "cricketscoreupdate"
+  },
+
+  "menu": {
+    "main": "Cricket Matches\r\n\r\n1. Live Matches\r\n2. Upcoming Matches\r\n3. Recent Matches\r\n\r\n0. Back",
+
+    "no_matches": "No matches available",
+
+    "default": "Send CRICKETSCOREUPDATE"
+  },
+
+  "score_menu": "1. Refresh\r\n0. Back",
+
+  "server": {
+    "port": 10000
+  }
+}

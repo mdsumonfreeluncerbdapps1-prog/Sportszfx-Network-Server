@@ -22,9 +22,11 @@ const APP_ID = "APP_136876";
 const API_KEY = "a0a5a7d4-f83a-4cb6-ae97-91238413ec8c";
 const API_URL = "https://api.cricapi.com/v1";
 
-let matches = [];
-let selectedMatch = null;
-let currentMenu = "main";
+// =======================
+// USER SESSIONS
+// =======================
+
+let sessions = {};
 
 // =======================
 // FETCH MATCHES
@@ -60,9 +62,26 @@ async function fetchMatches(type) {
 function getScore(match) {
 
   const name = match.name || "Match";
-  const status = match.status || "Score not available";
 
-  return `${name}\r\n\r\n${status}\r\n\r\n1. Refresh\r\n0. Back`;
+  let scoreText = "Score not available";
+
+  if (match.score && match.score.length > 0) {
+
+    let scores = [];
+
+    match.score.forEach((s) => {
+
+      scores.push(`${s.r}/${s.w} (${s.o} overs)`);
+
+    });
+
+    scoreText = scores.join(" | ");
+
+  }
+
+  const status = match.status || "";
+
+  return `${name}\r\n\r\nScore: ${scoreText}\r\n${status}\r\n\r\n1. Refresh\r\n0. Back`;
 
 }
 
@@ -75,15 +94,32 @@ app.post("/sms_listener", async (req, res) => {
   try {
 
     const message = (req.body.message || "").toLowerCase().trim();
+    const user = req.body.sourceAddress || "demo";
 
-    console.log("SMS:", message);
+    console.log("SMS:", message, "User:", user);
 
+    // create session if not exist
+
+    if (!sessions[user]) {
+
+      sessions[user] = {
+        menu: "main",
+        matches: [],
+        selectedMatch: null
+      };
+
+    }
+
+    const session = sessions[user];
+
+    // =====================
     // MAIN MENU
+    // =====================
 
     if (message === config.app.shortcode || message === "cricketscoreupdate") {
 
-      currentMenu = "main";
-      selectedMatch = null;
+      session.menu = "main";
+      session.selectedMatch = null;
 
       return res.send(config.menu.main);
 
@@ -93,30 +129,30 @@ app.post("/sms_listener", async (req, res) => {
     // MAIN MENU OPTIONS
     // =====================
 
-    if (currentMenu === "main") {
+    if (session.menu === "main") {
 
       if (message === "1") {
 
-        matches = await fetchMatches("currentMatches");
-        currentMenu = "matches";
+        session.matches = await fetchMatches("currentMatches");
+        session.menu = "matches";
 
       }
 
       else if (message === "2") {
 
-        matches = await fetchMatches("matches");
-        currentMenu = "matches";
+        session.matches = await fetchMatches("matches");
+        session.menu = "matches";
 
       }
 
       else if (message === "3") {
 
-        matches = await fetchMatches("matches");
-        currentMenu = "matches";
+        session.matches = await fetchMatches("matches");
+        session.menu = "matches";
 
       }
 
-      if (matches.length === 0) {
+      if (session.matches.length === 0) {
 
         return res.send(config.menu.no_matches);
 
@@ -124,7 +160,7 @@ app.post("/sms_listener", async (req, res) => {
 
       let menu = `${config.menu.matches}\r\n\r\n`;
 
-      matches.slice(0,3).forEach((match,index)=>{
+      session.matches.slice(0,3).forEach((match,index)=>{
 
         menu += `${index+1}. ${match.name}\r\n`;
 
@@ -140,23 +176,23 @@ app.post("/sms_listener", async (req, res) => {
     // MATCH SELECT
     // =====================
 
-    if (currentMenu === "matches") {
+    if (session.menu === "matches") {
 
       if (message === "0") {
 
-        currentMenu = "main";
+        session.menu = "main";
         return res.send(config.menu.main);
 
       }
 
       const index = parseInt(message) - 1;
 
-      if (matches[index]) {
+      if (session.matches[index]) {
 
-        selectedMatch = matches[index];
-        currentMenu = "score";
+        session.selectedMatch = session.matches[index];
+        session.menu = "score";
 
-        return res.send(getScore(selectedMatch));
+        return res.send(getScore(session.selectedMatch));
 
       }
 
@@ -166,18 +202,18 @@ app.post("/sms_listener", async (req, res) => {
     // SCORE MENU
     // =====================
 
-    if (currentMenu === "score") {
+    if (session.menu === "score") {
 
       if (message === "1") {
 
-        return res.send(getScore(selectedMatch));
+        return res.send(getScore(session.selectedMatch));
 
       }
 
       if (message === "0") {
 
-        currentMenu = "main";
-        selectedMatch = null;
+        session.menu = "main";
+        session.selectedMatch = null;
 
         return res.send(config.menu.main);
 

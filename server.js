@@ -24,6 +24,7 @@ const API_URL = "https://api.cricapi.com/v1";
 
 let matches = [];
 let selectedMatch = null;
+let currentMenu = "main";
 
 // =======================
 // FETCH MATCHES
@@ -61,7 +62,7 @@ function getScore(match) {
   const name = match.name || "Match";
   const status = match.status || "Score not available";
 
-  return `${name}\r\n\r\n${status}\r\n\r\n${config.score_menu}`;
+  return `${name}\r\n\r\n${status}\r\n\r\n1. Refresh\r\n0. Back`;
 
 }
 
@@ -79,37 +80,41 @@ app.post("/sms_listener", async (req, res) => {
 
     // MAIN MENU
 
-    if (message === config.app.shortcode) {
+    if (message === config.app.shortcode || message === "cricketscoreupdate") {
+
+      currentMenu = "main";
+      selectedMatch = null;
 
       return res.send(config.menu.main);
 
     }
 
-    // LIVE MATCHES
+    // =====================
+    // MAIN MENU OPTIONS
+    // =====================
 
-    if (message === "1") {
+    if (currentMenu === "main") {
 
-      matches = await fetchMatches("currentMatches");
+      if (message === "1") {
 
-    }
+        matches = await fetchMatches("currentMatches");
+        currentMenu = "matches";
 
-    // UPCOMING MATCHES
+      }
 
-    if (message === "2") {
+      else if (message === "2") {
 
-      matches = await fetchMatches("matches");
+        matches = await fetchMatches("matches");
+        currentMenu = "matches";
 
-    }
+      }
 
-    // RECENT MATCHES
+      else if (message === "3") {
 
-    if (message === "3") {
+        matches = await fetchMatches("matches");
+        currentMenu = "matches";
 
-      matches = await fetchMatches("matches");
-
-    }
-
-    if (["1","2","3"].includes(message)) {
+      }
 
       if (matches.length === 0) {
 
@@ -131,15 +136,25 @@ app.post("/sms_listener", async (req, res) => {
 
     }
 
-    // SELECT MATCH
+    // =====================
+    // MATCH SELECT
+    // =====================
 
-    if (!isNaN(message)) {
+    if (currentMenu === "matches") {
+
+      if (message === "0") {
+
+        currentMenu = "main";
+        return res.send(config.menu.main);
+
+      }
 
       const index = parseInt(message) - 1;
 
       if (matches[index]) {
 
         selectedMatch = matches[index];
+        currentMenu = "score";
 
         return res.send(getScore(selectedMatch));
 
@@ -147,11 +162,26 @@ app.post("/sms_listener", async (req, res) => {
 
     }
 
-    // REFRESH
+    // =====================
+    // SCORE MENU
+    // =====================
 
-    if (message === "1" && selectedMatch) {
+    if (currentMenu === "score") {
 
-      return res.send(getScore(selectedMatch));
+      if (message === "1") {
+
+        return res.send(getScore(selectedMatch));
+
+      }
+
+      if (message === "0") {
+
+        currentMenu = "main";
+        selectedMatch = null;
+
+        return res.send(config.menu.main);
+
+      }
 
     }
 

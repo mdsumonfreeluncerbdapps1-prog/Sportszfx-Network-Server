@@ -9,13 +9,6 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // =======================
-// BDAPPS CONFIG
-// =======================
-
-const BDAPPS_API_KEY = "977374d2647617747e34d1e857a420e9";
-const APP_ID = "APP_136876";
-
-// =======================
 // CRICKET API CONFIG
 // =======================
 
@@ -29,56 +22,61 @@ const API_URL = "https://api.cricapi.com/v1";
 let sessions = {};
 
 // =======================
+// CACHE MEMORY
+// =======================
+
+let matchCache = {};
+
+// =======================
 // FETCH MATCHES
 // =======================
 
 async function fetchMatches(type) {
 
-try {
+  try {
 
-const response = await axios.get(  
-  `${API_URL}/${type}?apikey=${API_KEY}&offset=0`  
-);  
+    const response = await axios.get(
+      `${API_URL}/${type}?apikey=${API_KEY}&offset=0`
+    );
 
-const data = response.data;  
+    const data = response.data;
 
-if (!data || !data.data) return [];  
+    if (!data || !data.data) return [];
 
-return data.data;
+    return data.data;
 
-} catch (error) {
+  } catch (error) {
 
-console.log("API Error:", error.message);  
-return [];
+    console.log("API Error:", error.message);
+    return [];
 
-}
+  }
 
 }
 
 // =======================
-// FETCH LATEST SCORE
+// UPDATE CACHE SCORE
 // =======================
 
-async function getLatestScore(matchId){
+async function updateScoreCache(matchId){
 
-try{
+  try{
 
-const response = await axios.get(  
-  `${API_URL}/match_info?apikey=${API_KEY}&id=${matchId}`  
-);  
+    const response = await axios.get(
+      `${API_URL}/match_info?apikey=${API_KEY}&id=${matchId}`
+    );
 
-if(response.data && response.data.data){  
-  return response.data.data;  
-}  
+    if(response.data && response.data.data){
 
-return null;
+      matchCache[matchId] = response.data.data;
 
-}catch(err){
+    }
 
-console.log("Score API Error:", err.message);  
-return null;
+  }catch(err){
 
-}
+    console.log("Cache Error:", err.message);
+
+  }
 
 }
 
@@ -88,29 +86,45 @@ return null;
 
 function getScore(match) {
 
-const name = match.name || "Match";
+  const name = match.name || "Match";
 
-let scoreText = "Score not available";
+  let scoreText = "Score not available";
 
-if (match.score && match.score.length > 0) {
+  if (match.score && match.score.length > 0) {
 
-let scores = [];  
+    let scores = [];
 
-match.score.forEach((s) => {  
+    match.score.forEach((s) => {
 
-  scores.push(`${s.r}/${s.w} (${s.o} overs)`);  
+      scores.push(`${s.r}/${s.w} (${s.o} overs)`);
 
-});  
+    });
 
-scoreText = scores.join(" | ");
+    scoreText = scores.join(" | ");
+
+  }
+
+  const status = match.status || "";
+
+  return `${name}\r\n\r\nScore: ${scoreText}\r\n${status}\r\n\r\n1. Refresh\r\n0. Back`;
 
 }
 
-const status = match.status || "";
+// =======================
+// AUTO CACHE REFRESH
+// =======================
 
-return ${name}\r\n\r\nScore: ${scoreText}\r\n${status}\r\n\r\n1. Refresh\r\n0. Back;
+setInterval(async () => {
 
-}
+  const matchIds = Object.keys(matchCache);
+
+  for(const id of matchIds){
+
+    await updateScoreCache(id);
+
+  }
+
+},15000);
 
 // =======================
 // SMS LISTENER
@@ -118,186 +132,154 @@ return ${name}\r\n\r\nScore: ${scoreText}\r\n${status}\r\n\r\n1. Refresh\r\n0. B
 
 app.post("/sms_listener", async (req, res) => {
 
-try {
+  try {
 
-const message = (req.body.message || "").toLowerCase().trim();  
-const user = req.body.sourceAddress || "demo";  
+    const message = (req.body.message || "").toLowerCase().trim();
+    const user = req.body.sourceAddress || "demo";
 
-console.log("SMS:", message, "User:", user);  
+    console.log("SMS:", message, "User:", user);
 
-if (!sessions[user]) {  
+    if (!sessions[user]) {
 
-  sessions[user] = {  
-    menu: "main",  
-    matches: [],  
-    selectedMatch: null  
-  };  
+      sessions[user] = {
+        menu: "main",
+        matches: [],
+        selectedMatch: null
+      };
 
-}  
+    }
 
-const session = sessions[user];  
+    const session = sessions[user];
 
-// =====================  
-// MAIN MENU  
-// =====================  
+    // =====================
+    // MAIN MENU
+    // =====================
 
-if (message === config.app.shortcode || message === "cricketscoreupdate") {  
+    if (message === config.app.shortcode || message === "cricketscoreupdate") {
 
-  session.menu = "main";  
-  session.selectedMatch = null;  
+      session.menu = "main";
+      session.selectedMatch = null;
 
-  return res.send(config.menu.main);  
+      return res.send(config.menu.main);
 
-}  
+    }
 
-// =====================  
-// MAIN MENU OPTIONS  
-// =====================  
+    // =====================
+    // MAIN MENU OPTIONS
+    // =====================
 
-if (session.menu === "main") {  
+    if (session.menu === "main") {
 
-  if (message === "1") {  
+      if (message === "1") {
 
-    session.matches = await fetchMatches("currentMatches");  
-    session.menu = "matches";  
+        session.matches = await fetchMatches("currentMatches");
+        session.menu = "matches";
 
-  }  
+      }
 
-  else if (message === "2") {  
+      else if (message === "2") {
 
-    session.matches = await fetchMatches("matches");  
-    session.menu = "matches";  
+        session.matches = await fetchMatches("matches");
+        session.menu = "matches";
 
-  }  
+      }
 
-  else if (message === "3") {  
+      else if (message === "3") {
 
-    session.matches = await fetchMatches("matches");  
-    session.menu = "matches";  
+        session.matches = await fetchMatches("matches");
+        session.menu = "matches";
 
-  }  
+      }
 
-  if (session.matches.length === 0) {  
+      if (session.matches.length === 0) {
 
-    return res.send(config.menu.no_matches);  
+        return res.send(config.menu.no_matches);
 
-  }  
+      }
 
-  let menu = `${config.menu.matches}\r\n\r\n`;  
+      let menu = `${config.menu.matches}\r\n\r\n`;
 
-  session.matches.slice(0,3).forEach((match,index)=>{  
+      session.matches.slice(0,3).forEach((match,index)=>{
 
-    menu += `${index+1}. ${match.name}\r\n`;  
+        menu += `${index+1}. ${match.name}\r\n`;
 
-  });  
+      });
 
-  menu += "\r\n0. Back";  
+      menu += "\r\n0. Back";
 
-  return res.send(menu);  
+      return res.send(menu);
 
-}  
+    }
 
-// =====================  
-// MATCH SELECT  
-// =====================  
+    // =====================
+    // MATCH SELECT
+    // =====================
 
-if (session.menu === "matches") {  
+    if (session.menu === "matches") {
 
-  if (message === "0") {  
+      if (message === "0") {
 
-    session.menu = "main";  
-    return res.send(config.menu.main);  
+        session.menu = "main";
+        return res.send(config.menu.main);
 
-  }  
+      }
 
-  const index = parseInt(message) - 1;  
+      const index = parseInt(message) - 1;
 
-  if (session.matches[index]) {  
+      if (session.matches[index]) {
 
-    session.selectedMatch = session.matches[index];  
-    session.menu = "score";  
+        const match = session.matches[index];
 
-    return res.send(getScore(session.selectedMatch));  
+        session.selectedMatch = match;
+        session.menu = "score";
 
-  }  
+        // add cache
 
-}  
+        if(!matchCache[match.id]){
 
-// =====================  
-// SCORE MENU  
-// =====================  
+          await updateScoreCache(match.id);
 
-if (session.menu === "score") {  
+        }
 
-  if (message === "1") {  
+        return res.send(getScore(matchCache[match.id] || match));
 
-    const latestMatch = await getLatestScore(session.selectedMatch.id);  
+      }
 
-    if(latestMatch){  
-      session.selectedMatch = latestMatch;  
-    }  
+    }
 
-    return res.send(getScore(session.selectedMatch));  
+    // =====================
+    // SCORE MENU
+    // =====================
 
-  }  
+    if (session.menu === "score") {
 
-  if (message === "0") {  
+      if (message === "1") {
 
-    session.menu = "main";  
-    session.selectedMatch = null;  
+        const match = matchCache[session.selectedMatch.id] || session.selectedMatch;
 
-    return res.send(config.menu.main);  
+        return res.send(getScore(match));
 
-  }  
+      }
 
-}  
+      if (message === "0") {
 
-return res.send(config.menu.default);
+        session.menu = "main";
+        session.selectedMatch = null;
 
-} catch (error) {
+        return res.send(config.menu.main);
 
-console.log("SMS Error:", error.message);  
-res.send("Service temporarily unavailable");
+      }
 
-}
+    }
 
-});
+    return res.send(config.menu.default);
 
-// =======================
-// USSD LISTENER
-// =======================
+  } catch (error) {
 
-app.post("/ussd_listener",(req,res)=>{
+    console.log("SMS Error:", error.message);
+    res.send("Service temporarily unavailable");
 
-try{
-
-res.send("Welcome to Sportzfx NK Cricket Service");
-
-}catch(err){
-
-res.send("USSD service error");
-
-}
-
-});
-
-// =======================
-// SUBSCRIPTION LISTENER
-// =======================
-
-app.post("/sub_listener",(req,res)=>{
-
-try{
-
-console.log("Subscription Event:", req.body);  
-
-res.send("Subscription Successful");
-
-}catch(err){
-
-res.send("Subscription Error");
-
-}
+  }
 
 });
 
@@ -307,7 +289,7 @@ res.send("Subscription Error");
 
 app.get("/",(req,res)=>{
 
-res.send("BDapps Cricket Server Running");
+  res.send("BDapps Cricket Server Running");
 
 });
 
@@ -319,6 +301,6 @@ const PORT = process.env.PORT || config.server.port;
 
 app.listen(PORT,()=>{
 
-console.log("Server running on port",PORT);
+  console.log("Server running on port",PORT);
 
 });

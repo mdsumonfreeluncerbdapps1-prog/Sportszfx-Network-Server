@@ -56,6 +56,33 @@ async function fetchMatches(type) {
 }
 
 // =======================
+// FETCH LATEST SCORE
+// =======================
+
+async function getLatestScore(matchId){
+
+  try{
+
+    const response = await axios.get(
+      `${API_URL}/match_info?apikey=${API_KEY}&id=${matchId}`
+    );
+
+    if(response.data && response.data.data){
+      return response.data.data;
+    }
+
+    return null;
+
+  }catch(err){
+
+    console.log("Score API Error:", err.message);
+    return null;
+
+  }
+
+}
+
+// =======================
 // SCORE FORMAT
 // =======================
 
@@ -97,8 +124,6 @@ app.post("/sms_listener", async (req, res) => {
     const user = req.body.sourceAddress || "demo";
 
     console.log("SMS:", message, "User:", user);
-
-    // create session if not exist
 
     if (!sessions[user]) {
 
@@ -205,6 +230,12 @@ app.post("/sms_listener", async (req, res) => {
     if (session.menu === "score") {
 
       if (message === "1") {
+
+        const latestMatch = await getLatestScore(session.selectedMatch.id);
+
+        if(latestMatch){
+          session.selectedMatch = latestMatch;
+        }
 
         return res.send(getScore(session.selectedMatch));
 

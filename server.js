@@ -111,7 +111,7 @@ function getScore(match) {
 }
 
 // =======================
-// AUTO CACHE REFRESH
+// AUTO CACHE REFRESH (5 sec)
 // =======================
 
 setInterval(async () => {
@@ -124,7 +124,7 @@ setInterval(async () => {
 
   }
 
-},15000);
+},5000);
 
 // =======================
 // SMS LISTENER
@@ -233,8 +233,6 @@ app.post("/sms_listener", async (req, res) => {
         session.selectedMatch = match;
         session.menu = "score";
 
-        // add cache
-
         if(!matchCache[match.id]){
 
           await updateScoreCache(match.id);
@@ -254,6 +252,8 @@ app.post("/sms_listener", async (req, res) => {
     if (session.menu === "score") {
 
       if (message === "1") {
+
+        await updateScoreCache(session.selectedMatch.id);
 
         const match = matchCache[session.selectedMatch.id] || session.selectedMatch;
 

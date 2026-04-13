@@ -9,7 +9,14 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // =======================
-// API CONFIG
+// BDAPPS CONFIG
+// =======================
+
+const BDAPPS_API_KEY = "977374d2647617747e34d1e857a420e9";
+const APP_ID = "APP_136876";
+
+// =======================
+// CRICKET API CONFIG
 // =======================
 
 const API_KEY = "a0a5a7d4-f83a-4cb6-ae97-91238413ec8c";
@@ -64,109 +71,136 @@ function getScore(match) {
 
 app.post("/sms_listener", async (req, res) => {
 
-  const message = (req.body.message || "").toLowerCase().trim();
+  try {
 
-  console.log("SMS:", message);
+    const message = (req.body.message || "").toLowerCase().trim();
 
-  // MAIN MENU
+    console.log("SMS:", message);
 
-  if (message === config.app.shortcode) {
+    // MAIN MENU
 
-    return res.send(config.menu.main);
+    if (message === config.app.shortcode) {
 
-  }
-
-  // LIVE MATCHES
-
-  if (message === "1") {
-
-    matches = await fetchMatches("currentMatches");
-
-  }
-
-  // UPCOMING MATCHES
-
-  if (message === "2") {
-
-    matches = await fetchMatches("matches");
-
-  }
-
-  // RECENT MATCHES
-
-  if (message === "3") {
-
-    matches = await fetchMatches("matches");
-
-  }
-
-  if (["1","2","3"].includes(message)) {
-
-    if (matches.length === 0) {
-
-      return res.send(config.menu.no_matches);
+      return res.send(config.menu.main);
 
     }
 
-    let menu = `${config.menu.matches}\r\n\r\n`;
+    // LIVE MATCHES
 
-    matches.slice(0,3).forEach((match,index)=>{
+    if (message === "1") {
 
-      menu += `${index+1}. ${match.name}\r\n`;
+      matches = await fetchMatches("currentMatches");
 
-    });
+    }
 
-    menu += "\r\n0. Back";
+    // UPCOMING MATCHES
 
-    return res.send(menu);
+    if (message === "2") {
 
-  }
+      matches = await fetchMatches("matches");
 
-  // SELECT MATCH
+    }
 
-  if (!isNaN(message)) {
+    // RECENT MATCHES
 
-    const index = parseInt(message) - 1;
+    if (message === "3") {
 
-    if (matches[index]) {
+      matches = await fetchMatches("matches");
 
-      selectedMatch = matches[index];
+    }
+
+    if (["1","2","3"].includes(message)) {
+
+      if (matches.length === 0) {
+
+        return res.send(config.menu.no_matches);
+
+      }
+
+      let menu = `${config.menu.matches}\r\n\r\n`;
+
+      matches.slice(0,3).forEach((match,index)=>{
+
+        menu += `${index+1}. ${match.name}\r\n`;
+
+      });
+
+      menu += "\r\n0. Back";
+
+      return res.send(menu);
+
+    }
+
+    // SELECT MATCH
+
+    if (!isNaN(message)) {
+
+      const index = parseInt(message) - 1;
+
+      if (matches[index]) {
+
+        selectedMatch = matches[index];
+
+        return res.send(getScore(selectedMatch));
+
+      }
+
+    }
+
+    // REFRESH
+
+    if (message === "1" && selectedMatch) {
 
       return res.send(getScore(selectedMatch));
 
     }
 
+    return res.send(config.menu.default);
+
+  } catch (error) {
+
+    console.log("SMS Error:", error.message);
+    res.send("Service temporarily unavailable");
+
   }
-
-  // REFRESH
-
-  if (message === "1" && selectedMatch) {
-
-    return res.send(getScore(selectedMatch));
-
-  }
-
-  res.send(config.menu.default);
 
 });
 
 // =======================
-// USSD
+// USSD LISTENER
 // =======================
 
 app.post("/ussd_listener",(req,res)=>{
 
-  res.send("Cricket Live Score Service");
+  try{
+
+    res.send("Welcome to Sportzfx NK Cricket Service");
+
+  }catch(err){
+
+    res.send("USSD service error");
+
+  }
 
 });
 
 // =======================
-// SUB
+// SUBSCRIPTION LISTENER
 // =======================
 
 app.post("/sub_listener",(req,res)=>{
 
-  res.send("Subscription Successful");
+  try{
+
+    console.log("Subscription Event:", req.body);
+
+    res.send("Subscription Successful");
+
+  }catch(err){
+
+    res.send("Subscription Error");
+
+  }
 
 });
 
@@ -180,6 +214,8 @@ app.get("/",(req,res)=>{
 
 });
 
+// =======================
+// SERVER START
 // =======================
 
 const PORT = process.env.PORT || config.server.port;

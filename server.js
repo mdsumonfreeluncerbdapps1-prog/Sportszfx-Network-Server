@@ -9,13 +9,6 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // =======================
-// BDAPPS CONFIG
-// =======================
-
-const BDAPPS_API_KEY = "977374d2647617747e34d1e857a420e9";
-const APP_ID = "APP_136876";
-
-// =======================
 // CRICKET API CONFIG
 // =======================
 
@@ -27,6 +20,12 @@ const API_URL = "https://api.cricapi.com/v1";
 // =======================
 
 let sessions = {};
+
+// =======================
+// CACHE MEMORY
+// =======================
+
+let matchCache = {};
 
 // =======================
 // FETCH MATCHES
@@ -56,10 +55,10 @@ async function fetchMatches(type) {
 }
 
 // =======================
-// FETCH LATEST SCORE
+// UPDATE CACHE SCORE
 // =======================
 
-async function getLatestScore(matchId){
+async function updateScoreCache(matchId){
 
   try{
 
@@ -68,15 +67,14 @@ async function getLatestScore(matchId){
     );
 
     if(response.data && response.data.data){
-      return response.data.data;
-    }
 
-    return null;
+      matchCache[matchId] = response.data.data;
+
+    }
 
   }catch(err){
 
-    console.log("Score API Error:", err.message);
-    return null;
+    console.log("Cache Error:", err.message);
 
   }
 
@@ -111,6 +109,22 @@ function getScore(match) {
   return `${name}\r\n\r\nScore: ${scoreText}\r\n${status}\r\n\r\n1. Refresh\r\n0. Back`;
 
 }
+
+// =======================
+// AUTO CACHE REFRESH
+// =======================
+
+setInterval(async () => {
+
+  const matchIds = Object.keys(matchCache);
+
+  for(const id of matchIds){
+
+    await updateScoreCache(id);
+
+  }
+
+},15000);
 
 // =======================
 // SMS LISTENER
@@ -214,10 +228,20 @@ app.post("/sms_listener", async (req, res) => {
 
       if (session.matches[index]) {
 
-        session.selectedMatch = session.matches[index];
+        const match = session.matches[index];
+
+        session.selectedMatch = match;
         session.menu = "score";
 
-        return res.send(getScore(session.selectedMatch));
+        // add cache
+
+        if(!matchCache[match.id]){
+
+          await updateScoreCache(match.id);
+
+        }
+
+        return res.send(getScore(matchCache[match.id] || match));
 
       }
 
@@ -231,13 +255,9 @@ app.post("/sms_listener", async (req, res) => {
 
       if (message === "1") {
 
-        const latestMatch = await getLatestScore(session.selectedMatch.id);
+        const match = matchCache[session.selectedMatch.id] || session.selectedMatch;
 
-        if(latestMatch){
-          session.selectedMatch = latestMatch;
-        }
-
-        return res.send(getScore(session.selectedMatch));
+        return res.send(getScore(match));
 
       }
 
@@ -258,44 +278,6 @@ app.post("/sms_listener", async (req, res) => {
 
     console.log("SMS Error:", error.message);
     res.send("Service temporarily unavailable");
-
-  }
-
-});
-
-// =======================
-// USSD LISTENER
-// =======================
-
-app.post("/ussd_listener",(req,res)=>{
-
-  try{
-
-    res.send("Welcome to Sportzfx NK Cricket Service");
-
-  }catch(err){
-
-    res.send("USSD service error");
-
-  }
-
-});
-
-// =======================
-// SUBSCRIPTION LISTENER
-// =======================
-
-app.post("/sub_listener",(req,res)=>{
-
-  try{
-
-    console.log("Subscription Event:", req.body);
-
-    res.send("Subscription Successful");
-
-  }catch(err){
-
-    res.send("Subscription Error");
 
   }
 

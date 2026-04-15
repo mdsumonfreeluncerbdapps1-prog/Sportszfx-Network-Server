@@ -26,7 +26,7 @@ let cacheTimestamp = {};
 // CACHE SETTINGS
 // =======================
 
-const CACHE_TIME = 15000; // 15 sec
+const CACHE_TIME = 15000;
 const SESSION_LIMIT = 5000;
 
 // =======================
@@ -163,11 +163,9 @@ app.post("/sms_listener", async (req,res)=>{
     if(!sessions[user]){
 
       sessions[user] = {
-
         menu:"main",
         matches:[],
         selectedMatch:null
-
       };
 
     }
@@ -175,7 +173,7 @@ app.post("/sms_listener", async (req,res)=>{
     const session = sessions[user];
 
     // =====================
-    // MAIN MENU
+    // START COMMAND
     // =====================
 
     if(message === config.app.shortcode || message === "cricketscoreupdate"){
@@ -188,7 +186,7 @@ app.post("/sms_listener", async (req,res)=>{
     }
 
     // =====================
-    // MAIN MENU OPTIONS
+    // MAIN MENU
     // =====================
 
     if(session.menu === "main"){
@@ -203,7 +201,6 @@ app.post("/sms_listener", async (req,res)=>{
       else if(message === "2"){
 
         const all = await fetchMatches("matches");
-
         session.matches = all.filter(m => !m.matchStarted);
         session.menu = "matches";
 
@@ -212,15 +209,22 @@ app.post("/sms_listener", async (req,res)=>{
       else if(message === "3"){
 
         const all = await fetchMatches("matches");
-
         session.matches = all.filter(m => m.matchStarted && m.matchEnded);
         session.menu = "matches";
 
       }
 
+      else{
+
+        return res.send(config.menu.default);
+
+      }
+
       if(session.matches.length === 0){
 
-        return res.send(config.menu.no_matches);
+        return res.send(`No matches available
+
+0. Back`);
 
       }
 
@@ -269,6 +273,8 @@ app.post("/sms_listener", async (req,res)=>{
         return res.send(getScore(matchCache[match.id] || match));
 
       }
+
+      return res.send("Invalid option\n\n0. Back");
 
     }
 

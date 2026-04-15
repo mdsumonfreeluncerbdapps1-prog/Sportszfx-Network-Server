@@ -30,22 +30,65 @@ const CACHE_TIME = 15000;
 const SESSION_LIMIT = 5000;
 
 // =======================
+// MATCH PRIORITY SYSTEM
+// =======================
+
+function getMatchPriority(match){
+
+ const name = (match.name || "").toLowerCase();
+
+ if(
+  name.includes("india") ||
+  name.includes("pakistan") ||
+  name.includes("bangladesh")
+ ){
+  return 1;
+ }
+
+ if(name.includes("ipl")){
+  return 2;
+ }
+
+ if(name.includes("bpl")){
+  return 3;
+ }
+
+ if(name.includes("world cup")){
+  return 4;
+ }
+
+ if(name.includes("asia cup")){
+  return 5;
+ }
+
+ return 10;
+
+}
+
+// =======================
 // FETCH MATCHES
 // =======================
 
-async function fetchMatches(type) {
+async function fetchMatches(type){
 
-  try {
+  try{
 
     const response = await axios.get(
       `${API_URL}/${type}?apikey=${API_KEY}&offset=0`
     );
 
-    if (!response.data || !response.data.data) return [];
+    if(!response.data || !response.data.data) return [];
 
-    return response.data.data;
+    const matches = response.data.data;
 
-  } catch (error) {
+    // SORT BY PRIORITY
+    matches.sort((a,b)=>{
+      return getMatchPriority(a) - getMatchPriority(b);
+    });
+
+    return matches;
+
+  }catch(error){
 
     console.log("Match API Error:", error.message);
     return [];
@@ -183,7 +226,9 @@ app.post("/sms_listener", async (req,res)=>{
 
     }
 
+    // =====================
     // MAIN MENU
+    // =====================
 
     if(session.menu === "main"){
 
@@ -238,7 +283,9 @@ app.post("/sms_listener", async (req,res)=>{
 
     }
 
+    // =====================
     // MATCH SELECT
+    // =====================
 
     if(session.menu === "matches"){
 
@@ -268,7 +315,9 @@ app.post("/sms_listener", async (req,res)=>{
 
     }
 
+    // =====================
     // SCORE MENU
+    // =====================
 
     if(session.menu === "score"){
 

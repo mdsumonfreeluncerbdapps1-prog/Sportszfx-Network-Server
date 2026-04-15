@@ -22,14 +22,20 @@ let sessions = {};
 const SESSION_LIMIT = 5000;
 
 // =======================
-// MATCH PRIORITY
+// MATCH PRIORITY SYSTEM
 // =======================
 
 function getPriority(match){
 
  const name = (match.name || "").toLowerCase();
+ const status = (match.status || "").toLowerCase();
 
- // India Pakistan Bangladesh
+ // LIVE MATCH FIRST
+ if(match.matchStarted && !match.matchEnded){
+  return 0;
+ }
+
+ // INDIA / PAKISTAN / BANGLADESH
  if(
   name.includes("india") ||
   name.includes("pakistan") ||
@@ -39,32 +45,26 @@ function getPriority(match){
  }
 
  // IPL
- if(
-  name.includes("indian premier league") ||
-  name.includes("ipl")
- ){
+ if(name.includes("indian premier league") || name.includes("ipl")){
   return 2;
  }
 
  // BPL
- if(
-  name.includes("bangladesh premier league") ||
-  name.includes("bpl")
- ){
+ if(name.includes("bangladesh premier league") || name.includes("bpl")){
   return 3;
  }
 
- // World Cup
+ // WORLD CUP
  if(name.includes("world cup")){
   return 4;
  }
 
- // Asia Cup
+ // ASIA CUP
  if(name.includes("asia cup")){
   return 5;
  }
 
- // International teams
+ // INTERNATIONAL TEAMS
  const bigTeams = [
   "australia",
   "england",
@@ -79,8 +79,16 @@ function getPriority(match){
   return 6;
  }
 
- // Others
- return 100;
+ // SMALL LEAGUE
+ if(
+  name.includes("cyprus") ||
+  name.includes("malta") ||
+  name.includes("croatia")
+ ){
+  return 50;
+ }
+
+ return 20;
 
 }
 
@@ -110,19 +118,37 @@ async function fetchAllMatches(){
 }
 
 // =======================
-// FILTER MATCH
+// FILTER MATCHES
 // =======================
 
 function getLive(matches){
- return matches.filter(m => m.matchStarted === true && m.matchEnded === false);
+
+ const live = matches.filter(
+  m => m.matchStarted === true && m.matchEnded === false
+ );
+
+ return live.sort((a,b)=> getPriority(a) - getPriority(b));
+
 }
 
 function getUpcoming(matches){
- return matches.filter(m => m.matchStarted === false);
+
+ const upcoming = matches.filter(
+  m => m.matchStarted === false
+ );
+
+ return upcoming.sort((a,b)=> getPriority(a) - getPriority(b));
+
 }
 
 function getRecent(matches){
- return matches.filter(m => m.matchEnded === true);
+
+ const recent = matches.filter(
+  m => m.matchEnded === true
+ );
+
+ return recent.sort((a,b)=> getPriority(a) - getPriority(b));
+
 }
 
 // =======================
@@ -159,7 +185,7 @@ ${status}
 }
 
 // =======================
-// SHOW MATCH LIST
+// MATCH LIST MENU
 // =======================
 
 function showMatches(session){

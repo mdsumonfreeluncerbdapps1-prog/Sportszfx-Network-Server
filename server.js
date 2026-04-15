@@ -29,27 +29,58 @@ function getPriority(match){
 
  const name = (match.name || "").toLowerCase();
 
- if(name.includes("india") || name.includes("pakistan") || name.includes("bangladesh")){
+ // India Pakistan Bangladesh
+ if(
+  name.includes("india") ||
+  name.includes("pakistan") ||
+  name.includes("bangladesh")
+ ){
   return 1;
  }
 
- if(name.includes("ipl")){
+ // IPL
+ if(
+  name.includes("indian premier league") ||
+  name.includes("ipl")
+ ){
   return 2;
  }
 
- if(name.includes("bpl")){
+ // BPL
+ if(
+  name.includes("bangladesh premier league") ||
+  name.includes("bpl")
+ ){
   return 3;
  }
 
+ // World Cup
  if(name.includes("world cup")){
   return 4;
  }
 
+ // Asia Cup
  if(name.includes("asia cup")){
   return 5;
  }
 
- return 10;
+ // International teams
+ const bigTeams = [
+  "australia",
+  "england",
+  "south africa",
+  "new zealand",
+  "sri lanka",
+  "afghanistan",
+  "west indies"
+ ];
+
+ if(bigTeams.some(t => name.includes(t))){
+  return 6;
+ }
+
+ // Others
+ return 100;
 
 }
 
@@ -193,9 +224,7 @@ app.post("/sms_listener", async (req,res)=>{
 
   }
 
-  // =====================
   // MAIN MENU
-  // =====================
 
   if(session.menu === "main"){
 
@@ -232,9 +261,7 @@ app.post("/sms_listener", async (req,res)=>{
 
   }
 
-  // =====================
-  // MATCH LIST MENU
-  // =====================
+  // MATCH LIST
 
   if(session.menu === "matches"){
 
@@ -269,9 +296,7 @@ app.post("/sms_listener", async (req,res)=>{
 
   }
 
-  // =====================
   // SCORE MENU
-  // =====================
 
   if(session.menu === "score"){
 

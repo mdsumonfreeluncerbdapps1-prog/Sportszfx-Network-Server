@@ -11,8 +11,8 @@ app.use(express.urlencoded({ extended: true }));
 // CRICKET API CONFIG
 // =======================
 
-const API_KEY = process.env.CRIC_API_KEY || "YOUR_API_KEY";
-const API_URL = "https://api.cricapi.com/v1";
+const API_KEY = "ec471071441bb2ac538a0ff901abd249";
+const API_URL = "https://api.api-cricket.com";
 
 // =======================
 // USER SESSIONS
@@ -33,21 +33,29 @@ const SESSION_LIMIT = 5000;
 // FETCH MATCHES
 // =======================
 
-async function fetchMatches(type) {
+async function fetchMatches(type){
 
-  try {
+  try{
 
-    const response = await axios.get(
-      `${API_URL}/${type}?apikey=${API_KEY}&offset=0`
-    );
+    let url="";
 
-    if (!response.data || !response.data.data) return [];
+    if(type==="currentMatches"){
+      url=`${API_URL}/?method=get_livescore&APIkey=${API_KEY}`;
+    }
 
-    return response.data.data;
+    if(type==="matches"){
+      url=`${API_URL}/?method=get_fixtures&APIkey=${API_KEY}`;
+    }
 
-  } catch (error) {
+    const response = await axios.get(url);
 
-    console.log("Match API Error:", error.message);
+    if(!response.data || !response.data.result) return [];
+
+    return response.data.result;
+
+  }catch(err){
+
+    console.log("Match API Error:",err.message);
     return [];
 
   }
@@ -73,12 +81,12 @@ async function updateScoreCache(matchId){
     }
 
     const response = await axios.get(
-      `${API_URL}/match_info?apikey=${API_KEY}&id=${matchId}`
+      `${API_URL}/?method=get_livescore&match_id=${matchId}&APIkey=${API_KEY}`
     );
 
-    if(response.data && response.data.data){
+    if(response.data && response.data.result){
 
-      matchCache[matchId] = response.data.data;
+      matchCache[matchId] = response.data.result[0];
       cacheTimestamp[matchId] = now;
 
     }
@@ -118,25 +126,15 @@ setInterval(()=>{
 
 function getScore(match){
 
-  const name = match.name || "Match";
+  const name = `${match.event_home_team} vs ${match.event_away_team}`;
 
-  let scoreText = "Score not available";
+  const score = `${match.event_home_score} - ${match.event_away_score}`;
 
-  if(match.score && match.score.length > 0){
-
-    const scores = match.score.map(
-      s => `${s.r}/${s.w} (${s.o} ov)`
-    );
-
-    scoreText = scores.join(" | ");
-
-  }
-
-  const status = match.status || "";
+  const status = match.event_status || "";
 
   return `${name}
 
-Score: ${scoreText}
+Score: ${score}
 
 ${status}
 
@@ -172,10 +170,6 @@ app.post("/sms_listener", async (req,res)=>{
 
     const session = sessions[user];
 
-    // =====================
-    // START COMMAND
-    // =====================
-
     if(message === config.app.shortcode || message === "cricketscoreupdate"){
 
       session.menu = "main";
@@ -184,10 +178,6 @@ app.post("/sms_listener", async (req,res)=>{
       return res.send(config.menu.main);
 
     }
-
-    // =====================
-    // MAIN MENU
-    // =====================
 
     if(session.menu === "main"){
 
@@ -201,7 +191,7 @@ app.post("/sms_listener", async (req,res)=>{
       else if(message === "2"){
 
         const all = await fetchMatches("matches");
-        session.matches = all.filter(m => !m.matchStarted);
+        session.matches = all;
         session.menu = "matches";
 
       }
@@ -209,7 +199,7 @@ app.post("/sms_listener", async (req,res)=>{
       else if(message === "3"){
 
         const all = await fetchMatches("matches");
-        session.matches = all.filter(m => m.matchStarted && m.matchEnded);
+        session.matches = all;
         session.menu = "matches";
 
       }
@@ -234,7 +224,7 @@ app.post("/sms_listener", async (req,res)=>{
 
       session.matches.slice(0,5).forEach((m,i)=>{
 
-        menu += `${i+1}. ${m.name}
+        menu += `${i+1}. ${m.event_home_team} vs ${m.event_away_team}
 `;
 
       });
@@ -245,10 +235,6 @@ app.post("/sms_listener", async (req,res)=>{
       return res.send(menu);
 
     }
-
-    // =====================
-    // MATCH SELECT
-    // =====================
 
     if(session.menu === "matches"){
 
@@ -268,9 +254,9 @@ app.post("/sms_listener", async (req,res)=>{
         session.selectedMatch = match;
         session.menu = "score";
 
-        await updateScoreCache(match.id);
+        await updateScoreCache(match.event_key);
 
-        return res.send(getScore(matchCache[match.id] || match));
+        return res.send(getScore(matchCache[match.event_key] || match));
 
       }
 
@@ -278,18 +264,14 @@ app.post("/sms_listener", async (req,res)=>{
 
     }
 
-    // =====================
-    // SCORE MENU
-    // =====================
-
     if(session.menu === "score"){
 
       if(message === "1"){
 
-        await updateScoreCache(session.selectedMatch.id);
+        await updateScoreCache(session.selectedMatch.event_key);
 
         const match =
-          matchCache[session.selectedMatch.id] ||
+          matchCache[session.selectedMatch.event_key] ||
           session.selectedMatch;
 
         return res.send(getScore(match));

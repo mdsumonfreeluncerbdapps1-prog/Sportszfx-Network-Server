@@ -11,9 +11,14 @@ app.use(express.urlencoded({ extended: true }));
 // API LINKS
 // =======================
 
-const LIVE_API = "https://cricbuzz.autoaiassistant.com/api.php?action=live&type=all";
-const UPCOMING_API = "https://cricbuzz.autoaiassistant.com/api.php?action=upcoming&type=all";
-const RECENT_API = "https://cricbuzz.autoaiassistant.com/api.php?action=recent&type=all";
+const LIVE_API =
+"https://cricbuzz.autoaiassistant.com/api.php?action=live&type=all";
+
+const UPCOMING_API =
+"https://cricbuzz.autoaiassistant.com/api.php?action=upcoming&type=all";
+
+const RECENT_API =
+"https://cricbuzz.autoaiassistant.com/api.php?action=recent&type=all";
 
 // =======================
 // SESSION
@@ -23,93 +28,63 @@ let sessions = {};
 const SESSION_LIMIT = 5000;
 
 // =======================
-// FETCH API
+// FETCH MATCHES
 // =======================
 
 async function fetchMatches(url){
 
  try{
-  const res = await axios.get(url);
-  let matches = res.data || [];
 
-  return sortMatches(matches);
+  const res = await axios.get(url);
+  return res.data || [];
 
  }catch(err){
+
   console.log("API Error:", err.message);
   return [];
+
  }
 
 }
 
 // =======================
-// MATCH PRIORITY SYSTEM
+// MATCH TITLE FORMAT
 // =======================
 
-function getPriority(name){
+function formatMatchTitle(match){
 
- name = name.toLowerCase();
+ let name = match.match_name || "";
 
- // IPL / BPL / PSL / WORLD CUP
- if(name.includes("indian premier league")) return 1;
- if(name.includes("bangladesh premier league")) return 2;
- if(name.includes("pakistan super league")) return 3;
- if(name.includes("world cup")) return 4;
- if(name.includes("asia cup")) return 5;
+ // detect match type
+ let matchType = name.match(/\d+(st|nd|rd|th)\s(Match|ODI|T20I|Test)/i);
 
- // INTERNATIONAL TEAMS
- const bigTeams = [
-  "india","pakistan","bangladesh","australia",
-  "england","south africa","new zealand",
-  "sri lanka","afghanistan","west indies"
- ];
-
- if(bigTeams.some(t => name.includes(t))){
-  return 6;
+ if(!matchType){
+  matchType = name.match(/\d+(st|nd|rd|th)\s(unofficial\s)?(ODI|T20I|Test)/i);
  }
 
- return 50;
+ let title = matchType ? matchType[0] : "Match";
+
+ // detect team codes (MI, PBKS etc)
+ let teams = name.match(/[A-Z]{2,4}/g);
+
+ if(!teams || teams.length < 2){
+  return title;
+ }
+
+ let team1 = teams[0];
+ let team2 = teams[1];
+
+ return `${title} . ${team1} VS ${team2}`;
 }
 
 // =======================
-// SORT MATCHES
-// =======================
-
-function sortMatches(matches){
-
- return matches.sort((a,b)=>{
-
-  const aName = a.match_name || "";
-  const bName = b.match_name || "";
-
-  return getPriority(aName) - getPriority(bName);
-
- });
-
-}
-
-// =======================
-// CLEAN MATCH TITLE
-// =======================
-
-function cleanMatchTitle(name){
-
- if(!name) return "Match";
-
- // remove stadium info
- name = name.replace(/,.*$/,"");
-
- return name;
-
-}
-
-// =======================
-// SCORE VIEW
+// SCORE FORMAT
 // =======================
 
 function getScore(match){
 
- const name = cleanMatchTitle(match.match_name);
- const status = match.status || "";
+ const name = formatMatchTitle(match);
+ const status = match.status || "Live";
 
  return `${name}
 
@@ -121,7 +96,7 @@ ${status}
 }
 
 // =======================
-// MATCH LIST
+// MATCH LIST MENU
 // =======================
 
 function showMatches(session){
@@ -141,8 +116,7 @@ function showMatches(session){
 
  list.forEach((m,i)=>{
 
-  const name = cleanMatchTitle(m.match_name);
-
+  const name = formatMatchTitle(m);
   menu += `${i+1}. ${name}\n`;
 
  });
@@ -270,7 +244,7 @@ app.post("/sms_listener", async (req,res)=>{
 
   }
 
-  // SCORE
+  // SCORE MENU
 
   if(session.menu === "score"){
 
@@ -279,8 +253,10 @@ app.post("/sms_listener", async (req,res)=>{
    }
 
    if(message === "0"){
+
     session.menu = "matches";
     return res.send(showMatches(session));
+
    }
 
   }
@@ -289,7 +265,7 @@ app.post("/sms_listener", async (req,res)=>{
 
  }catch(err){
 
-  console.log("SMS Error:",err.message);
+  console.log("SMS Error:", err.message);
   res.send("Service temporarily unavailable");
 
  }
@@ -301,11 +277,15 @@ app.post("/sms_listener", async (req,res)=>{
 // =======================
 
 app.get("/",(req,res)=>{
+
  res.send("BDApps Cricket Server Running");
+
 });
 
 const PORT = process.env.PORT || config.server.port;
 
-app.listen(PORT, ()=>{
- console.log("Server running on port", PORT);
+app.listen(PORT,()=>{
+
+ console.log("Server running on port",PORT);
+
 });

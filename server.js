@@ -44,7 +44,7 @@ async function fetchMatches(url){
 }
 
 // =======================
-// SCORE FORMAT
+// SCORE FORMAT (WITH OVER)
 // =======================
 
 function getScore(match){
@@ -56,11 +56,24 @@ function getScore(match){
 
  const score = match.score || match.match_score || "Score not available";
 
+ const overs =
+  match.overs ||
+  match.over ||
+  match.current_over ||
+  match.over_summary ||
+  "";
+
  const status = match.status || match.match_status || "";
+
+ let scoreLine = score;
+
+ if(overs){
+  scoreLine = `${score} (${overs} ov)`;
+ }
 
  return `${name}
 
-Score: ${score}
+Score: ${scoreLine}
 
 ${status}
 
@@ -129,7 +142,7 @@ app.post("/sms_listener", async (req,res)=>{
 
   const session = sessions[user];
 
-  // START
+  // START COMMAND
 
   if(message.includes(config.app.shortcode)){
 
@@ -215,7 +228,9 @@ app.post("/sms_listener", async (req,res)=>{
   if(session.menu === "score"){
 
    if(message === "1"){
+
     return res.send(getScore(session.selectedMatch));
+
    }
 
    if(message === "0"){

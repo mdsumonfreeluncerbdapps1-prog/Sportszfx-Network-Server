@@ -23,42 +23,92 @@ let sessions = {};
 const SESSION_LIMIT = 5000;
 
 // =======================
-// FETCH MATCHES
+// FETCH API
 // =======================
 
 async function fetchMatches(url){
 
  try{
-
   const res = await axios.get(url);
-  return res.data || [];
+  let matches = res.data || [];
+
+  return sortMatches(matches);
 
  }catch(err){
-
   console.log("API Error:", err.message);
   return [];
-
  }
 
 }
 
 // =======================
-// MATCH TITLE
+// MATCH PRIORITY SYSTEM
 // =======================
 
-function getMatchTitle(match){
+function getPriority(name){
 
- return match.match_name || "Match";
+ name = name.toLowerCase();
+
+ // IPL / BPL / PSL / WORLD CUP
+ if(name.includes("indian premier league")) return 1;
+ if(name.includes("bangladesh premier league")) return 2;
+ if(name.includes("pakistan super league")) return 3;
+ if(name.includes("world cup")) return 4;
+ if(name.includes("asia cup")) return 5;
+
+ // INTERNATIONAL TEAMS
+ const bigTeams = [
+  "india","pakistan","bangladesh","australia",
+  "england","south africa","new zealand",
+  "sri lanka","afghanistan","west indies"
+ ];
+
+ if(bigTeams.some(t => name.includes(t))){
+  return 6;
+ }
+
+ return 50;
+}
+
+// =======================
+// SORT MATCHES
+// =======================
+
+function sortMatches(matches){
+
+ return matches.sort((a,b)=>{
+
+  const aName = a.match_name || "";
+  const bName = b.match_name || "";
+
+  return getPriority(aName) - getPriority(bName);
+
+ });
 
 }
 
 // =======================
-// SCORE SCREEN
+// CLEAN MATCH TITLE
+// =======================
+
+function cleanMatchTitle(name){
+
+ if(!name) return "Match";
+
+ // remove stadium info
+ name = name.replace(/,.*$/,"");
+
+ return name;
+
+}
+
+// =======================
+// SCORE VIEW
 // =======================
 
 function getScore(match){
 
- const name = getMatchTitle(match);
+ const name = cleanMatchTitle(match.match_name);
  const status = match.status || "";
 
  return `${name}
@@ -81,11 +131,19 @@ function showMatches(session){
 
  const list = session.matches.slice(start,end);
 
- let menu = `Matches\n\n`;
+ let title = "Matches";
+
+ if(session.type === "live") title = "Live Matches";
+ if(session.type === "upcoming") title = "Upcoming Matches";
+ if(session.type === "recent") title = "Recent Matches";
+
+ let menu = `${title}\n\n`;
 
  list.forEach((m,i)=>{
 
-  menu += `${i+1}. ${getMatchTitle(m)}\n`;
+  const name = cleanMatchTitle(m.match_name);
+
+  menu += `${i+1}. ${name}\n`;
 
  });
 
@@ -120,14 +178,15 @@ app.post("/sms_listener", async (req,res)=>{
     menu:"main",
     matches:[],
     selectedMatch:null,
-    page:0
+    page:0,
+    type:""
    };
 
   }
 
   const session = sessions[user];
 
-  // START COMMAND
+  // START
 
   if(message.includes(config.app.shortcode)){
 
@@ -138,22 +197,23 @@ app.post("/sms_listener", async (req,res)=>{
 
   }
 
-  // =======================
   // MAIN MENU
-  // =======================
 
   if(session.menu === "main"){
 
    if(message === "1"){
     session.matches = await fetchMatches(LIVE_API);
+    session.type = "live";
    }
 
    else if(message === "2"){
     session.matches = await fetchMatches(UPCOMING_API);
+    session.type = "upcoming";
    }
 
    else if(message === "3"){
     session.matches = await fetchMatches(RECENT_API);
+    session.type = "recent";
    }
 
    else{
@@ -175,9 +235,7 @@ app.post("/sms_listener", async (req,res)=>{
 
   }
 
-  // =======================
   // MATCH LIST
-  // =======================
 
   if(session.menu === "matches"){
 
@@ -195,7 +253,7 @@ app.post("/sms_listener", async (req,res)=>{
 
    }
 
-   const index = (session.page * 5) + (parseInt(message) - 1);
+   const index = (session.page*5) + (parseInt(message)-1);
 
    if(session.matches[index]){
 
@@ -212,9 +270,7 @@ app.post("/sms_listener", async (req,res)=>{
 
   }
 
-  // =======================
-  // SCORE MENU
-  // =======================
+  // SCORE
 
   if(session.menu === "score"){
 
@@ -223,10 +279,8 @@ app.post("/sms_listener", async (req,res)=>{
    }
 
    if(message === "0"){
-
     session.menu = "matches";
     return res.send(showMatches(session));
-
    }
 
   }
@@ -235,7 +289,7 @@ app.post("/sms_listener", async (req,res)=>{
 
  }catch(err){
 
-  console.log("SMS Error:", err.message);
+  console.log("SMS Error:",err.message);
   res.send("Service temporarily unavailable");
 
  }
@@ -246,7 +300,7 @@ app.post("/sms_listener", async (req,res)=>{
 // SERVER
 // =======================
 
-app.get("/", (req,res)=>{
+app.get("/",(req,res)=>{
  res.send("BDApps Cricket Server Running");
 });
 

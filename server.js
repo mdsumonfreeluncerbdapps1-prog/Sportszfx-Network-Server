@@ -1,14 +1,15 @@
 const express = require("express");
 const axios = require("axios");
+const config = require("./config.json");
 
 const app = express();
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-/* ======================
-   API CONFIG
-====================== */
+// =======================
+// API URL
+// =======================
 
 const LIVE_API =
 "https://cricbuzz.autoaiassistant.com/api.php?action=live&type=all";
@@ -20,259 +21,321 @@ const RECENT_API =
 "https://cricbuzz.autoaiassistant.com/api.php?action=recent&type=all";
 
 
-/* ======================
-   SESSION STORE
-====================== */
+// =======================
+// SESSION
+// =======================
 
-let sessionMatches = [];
+let sessions = {};
+const SESSION_LIMIT = 5000;
 
 
-/* ======================
-   TEAM SHORT CODE
-====================== */
+// =======================
+// MATCH PARSER (FIXED)
+// =======================
 
-function shortTeam(name) {
+function parseMatch(match){
 
- if (!name) return "";
+ const name = match.match_name || "";
 
- return name
-  .split(" ")
-  .map(w => w[0])
-  .join("")
-  .toUpperCase();
+ // Match type detect
+ const typeMatch =
+ name.match(/(\d+(st|nd|rd|th)\sMatch|\d+(st|nd|rd|th)\sODI|\d+(st|nd|rd|th)\sT20I|\d+(st|nd|rd|th)\sTest|\d+(st|nd|rd|th)\sT10)/i);
+
+ const matchType = typeMatch ? typeMatch[0] : "Match";
+
+ // Detect teams from score pattern
+ const teamShort =
+ name.match(/([A-Z]{2,4})\d*[-\/]?\d*\s*\(\d*\.?\d*\)/g);
+
+ let team1 = "";
+ let team2 = "";
+
+ if(teamShort && teamShort.length >= 2){
+
+  team1 = teamShort[0].match(/[A-Z]{2,4}/)[0];
+  team2 = teamShort[1].match(/[A-Z]{2,4}/)[0];
+
+ }
+
+ return `${matchType} . ${team1} VS ${team2}`;
 }
 
 
-/* ======================
-   MATCH NAME PARSER
-====================== */
+// =======================
+// FETCH MATCHES
+// =======================
 
-function parseMatchName(name) {
+async function fetchMatches(type){
 
- if (!name) return "Match";
+ try{
 
- let typeMatch = name.match(
- /(\d+(st|nd|rd|th)\sMatch|\d+(st|nd|rd|th)\sODI|\d+(st|nd|rd|th)\sT20I|\d+(st|nd|rd|th)\sTest|\d+(st|nd|rd|th)\sT10)/i
- );
+  let url;
 
- let matchType = typeMatch ? typeMatch[0] : "Match";
+  if(type==="live") url = LIVE_API;
+  if(type==="upcoming") url = UPCOMING_API;
+  if(type==="recent") url = RECENT_API;
 
- let vsMatch = name.match(/([A-Za-z ]+)\s+vs\s+([A-Za-z ]+)/i);
+  const res = await axios.get(url);
 
- if (vsMatch) {
+  return res.data || [];
 
-  let team1 = shortTeam(vsMatch[1]);
-  let team2 = shortTeam(vsMatch[2]);
+ }catch(e){
 
-  return `${matchType} . ${team1} VS ${team2}`;
+  console.log("API Error:",e.message);
+  return [];
+
  }
 
- return matchType;
 }
 
 
-/* ======================
-   DATE FORMAT
-====================== */
+// =======================
+// MATCH LIST MENU
+// =======================
 
-function formatDate(date) {
+function showMatches(session,title){
 
- if (!date) return "";
+ const start = session.page*5;
+ const end = start+5;
 
- const d = new Date(date);
+ const list = session.matches.slice(start,end);
 
- return d.toDateString();
+ let menu = `${title}\n\n`;
+
+ list.forEach((m,i)=>{
+
+  const text = parseMatch(m);
+
+  menu += `${i+1}. ${text}\n`;
+
+ });
+
+ if(end < session.matches.length){
+
+  menu += `\n9 More Matches\n`;
+
+ }
+
+ menu += `0 Back`;
+
+ return menu;
+
 }
 
 
-/* ======================
-   MAIN SMS LISTENER
-====================== */
+// =======================
+// MATCH INFORMATION
+// =======================
 
-app.post("/sms_listener", async (req, res) => {
+function getMatchInfo(match){
 
- const message = (req.body.message || "").trim();
+ const name = parseMatch(match);
 
+ const venue = match.location || "";
+ const time = match.start_date_time || "";
+ const status = match.status || "";
 
-/* ======================
-   MAIN MENU
-====================== */
+ let score = "";
 
- if (message === "CRICKETSCOREUPDATE") {
+ if(match.score && match.score.length){
 
-  return res.send(`Cricket Score Service
+  score = match.score.join("\n");
 
-1 Live Matches
-2 Upcoming Matches
-3 Recent Matches
-
-0 Exit`);
  }
 
+ let text = `Match Information\n\n${name}\n\n`;
 
-/* ======================
-   LIVE MATCH LIST
-====================== */
+ if(score) text += `${score}\n\n`;
 
- if (message === "1") {
+ if(venue) text += `Venue: ${venue}\n`;
 
-  const api = await axios.get(LIVE_API);
+ if(time) text += `Date & Time: ${time}\n\n`;
 
-  const matches = api.data.data || api.data;
+ text += `${status}\n\n1 Refresh\n0 Back`;
 
-  sessionMatches = matches;
+ return text;
 
-  let output = "Live Matches\n\n";
-
-  matches.slice(0,5).forEach((m,i)=>{
-
-   const name = parseMatchName(m.match_name);
-
-   output += `${i+1}. ${name}\n`;
-
-  });
-
-  output += "\n9 More Matches\n0 Back";
-
-  return res.send(output);
- }
+}
 
 
-/* ======================
-   UPCOMING MATCH LIST
-====================== */
+// =======================
+// SMS LISTENER
+// =======================
 
- if (message === "2") {
+app.post("/sms_listener", async (req,res)=>{
 
-  const api = await axios.get(UPCOMING_API);
+ try{
 
-  const matches = api.data.data || api.data;
+  const message = (req.body.message || "").trim().toLowerCase();
+  const user = req.body.sourceAddress || "demo";
 
-  sessionMatches = matches;
+  if(Object.keys(sessions).length > SESSION_LIMIT){
 
-  let output = "Upcoming Matches\n\n";
+   sessions = {};
 
-  matches.slice(0,5).forEach((m,i)=>{
-
-   const name = parseMatchName(m.match_name);
-
-   output += `${i+1}. ${name}\n`;
-
-  });
-
-  output += "\n9 More Matches\n0 Back";
-
-  return res.send(output);
- }
-
-
-/* ======================
-   RECENT MATCH LIST
-====================== */
-
- if (message === "3") {
-
-  const api = await axios.get(RECENT_API);
-
-  const matches = api.data.data || api.data;
-
-  sessionMatches = matches;
-
-  let output = "Recent Matches\n\n";
-
-  matches.slice(0,5).forEach((m,i)=>{
-
-   const name = parseMatchName(m.match_name);
-
-   output += `${i+1}. ${name}\n`;
-
-  });
-
-  output += "\n9 More Matches\n0 Back";
-
-  return res.send(output);
- }
-
-
-/* ======================
-   MATCH DETAIL
-====================== */
-
- const index = parseInt(message) - 1;
-
- if (sessionMatches[index]) {
-
-  const match = sessionMatches[index];
-
-  const name = parseMatchName(match.match_name);
-
-  const venue = match.location || "Unknown";
-
-  const date = formatDate(match.start_date_time);
-
-  const status = match.status || "";
-
-  const score1 = match.team1_score || "";
-  const score2 = match.team2_score || "";
-
-  const result = match.result || "";
-
-  let output = `Match Information
-
-${name}
-
-${score1}
-${score2}
-
-Venue: ${venue}
-Date: ${date}
-
-`;
-
-  if (result) {
-
-   output += `Result: ${result}\n\n`;
-
-  } else {
-
-   output += `${status}\n\n`;
   }
 
-  output += "1 Refresh\n0 Back";
+  if(!sessions[user]){
 
-  return res.send(output);
+   sessions[user] = {
+
+    menu:"main",
+    matches:[],
+    selected:null,
+    page:0,
+    type:""
+
+   };
+
+  }
+
+  const session = sessions[user];
+
+
+  // START
+
+  if(message.includes(config.app.shortcode)){
+
+   session.menu="main";
+   session.page=0;
+
+   return res.send(config.menu.main);
+
+  }
+
+
+  // MAIN MENU
+
+  if(session.menu==="main"){
+
+   if(message==="1"){
+
+    session.matches = await fetchMatches("live");
+    session.menu="matches";
+    session.page=0;
+    session.type="Live Matches";
+
+    return res.send(showMatches(session,"Live Matches"));
+
+   }
+
+   if(message==="2"){
+
+    session.matches = await fetchMatches("upcoming");
+    session.menu="matches";
+    session.page=0;
+    session.type="Upcoming Matches";
+
+    return res.send(showMatches(session,"Upcoming Matches"));
+
+   }
+
+   if(message==="3"){
+
+    session.matches = await fetchMatches("recent");
+    session.menu="matches";
+    session.page=0;
+    session.type="Recent Matches";
+
+    return res.send(showMatches(session,"Recent Matches"));
+
+   }
+
+   return res.send(config.menu.default);
+
+  }
+
+
+  // MATCH LIST
+
+  if(session.menu==="matches"){
+
+   if(message==="0"){
+
+    session.menu="main";
+
+    return res.send(config.menu.main);
+
+   }
+
+   if(message==="9"){
+
+    session.page++;
+
+    return res.send(showMatches(session,session.type));
+
+   }
+
+   const index = (session.page*5)+(parseInt(message)-1);
+
+   if(session.matches[index]){
+
+    const match = session.matches[index];
+
+    session.selected = match;
+    session.menu="info";
+
+    return res.send(getMatchInfo(match));
+
+   }
+
+   return res.send("Invalid Option\n\n0 Back");
+
+  }
+
+
+  // MATCH INFO
+
+  if(session.menu==="info"){
+
+   if(message==="1"){
+
+    return res.send(getMatchInfo(session.selected));
+
+   }
+
+   if(message==="0"){
+
+    session.menu="matches";
+
+    return res.send(showMatches(session,session.type));
+
+   }
+
+  }
+
+  return res.send(config.menu.default);
+
+ }catch(e){
+
+  console.log("SMS Error:",e.message);
+
+  res.send("Service temporarily unavailable");
+
  }
-
-
-/* ======================
-   BACK
-====================== */
-
- if (message === "0") {
-
-  return res.send(`Cricket Score Service
-
-1 Live Matches
-2 Upcoming Matches
-3 Recent Matches
-
-0 Exit`);
- }
-
-
- return res.send("Invalid Option");
 
 });
 
 
-/* ======================
-   SERVER START
-====================== */
+// =======================
+// HEALTH CHECK
+// =======================
 
-const PORT = process.env.PORT || 3000;
+app.get("/",(req,res)=>{
 
-app.listen(PORT, () => {
+ res.send("Cricket Server Running");
 
- console.log("Server Running on " + PORT);
+});
+
+
+// =======================
+// SERVER START
+// =======================
+
+const PORT = process.env.PORT || config.server.port;
+
+app.listen(PORT,()=>{
+
+ console.log("Server running on port",PORT);
 
 });

@@ -30,42 +30,32 @@ const SESSION_LIMIT = 5000;
 
 
 // =======================
-// MATCH PARSER
+// MATCH PARSER (FIXED)
 // =======================
 
 function parseMatch(match){
 
  const name = match.match_name || "";
 
- // Detect match type
- const typeMatch = name.match(/(\d+(st|nd|rd|th)\sMatch|\d+(st|nd|rd|th)\sODI|\d+(st|nd|rd|th)\sT20I|\d+(st|nd|rd|th)\sTest|\d+(st|nd|rd|th)\sT10)/i);
+ // Match type detect
+ const typeMatch =
+ name.match(/(\d+(st|nd|rd|th)\sMatch|\d+(st|nd|rd|th)\sODI|\d+(st|nd|rd|th)\sT20I|\d+(st|nd|rd|th)\sTest|\d+(st|nd|rd|th)\sT10)/i);
 
  const matchType = typeMatch ? typeMatch[0] : "Match";
+
+ // Detect teams from score pattern
+ const teamShort =
+ name.match(/([A-Z]{2,4})\d*[-\/]?\d*\s*\(\d*\.?\d*\)/g);
 
  let team1 = "";
  let team2 = "";
 
- // Detect VS
- const vsMatch = name.match(/([A-Za-z ]+)\s+vs\s+([A-Za-z ]+)/i);
+ if(teamShort && teamShort.length >= 2){
 
- if(vsMatch){
-
-  team1 = vsMatch[1].trim();
-  team2 = vsMatch[2].trim();
-
- }else{
-
-  const words = name.split(" ");
-  team1 = words[words.length-2] || "";
-  team2 = words[words.length-1] || "";
+  team1 = teamShort[0].match(/[A-Z]{2,4}/)[0];
+  team2 = teamShort[1].match(/[A-Z]{2,4}/)[0];
 
  }
-
- // Short team name
- const short = t => t.split(" ").map(w=>w[0]).join("").toUpperCase();
-
- team1 = short(team1);
- team2 = short(team2);
 
  return `${matchType} . ${team1} VS ${team2}`;
 }

@@ -7,10 +7,7 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// =======================
 // API LINKS
-// =======================
-
 const LIVE_API = "https://cricbuzz.autoaiassistant.com/api.php?action=live&type=all";
 const UPCOMING_API = "https://cricbuzz.autoaiassistant.com/api.php?action=upcoming&type=all";
 const RECENT_API = "https://cricbuzz.autoaiassistant.com/api.php?action=recent&type=all";
@@ -19,74 +16,66 @@ let sessions = {};
 const SESSION_LIMIT = 5000;
 
 
-// =======================
 // FETCH MATCHES
-// =======================
-
 async function fetchMatches(url){
  try{
   const res = await axios.get(url);
   return res.data || [];
  }catch(err){
-  console.log("API Error:", err.message);
+  console.log("API Error:",err.message);
   return [];
  }
 }
 
 
-// =======================
-// TEAM DETECT
-// =======================
+// TEAM DETECTOR
+function detectTeams(text){
 
-function detectTeams(name){
+ if(!text) return [];
 
- if(!name) return [];
+ const teams = text.match(/[A-Z]{2,4}/g);
 
- const vsMatch = name.match(/([A-Za-z ]+)\svs\s([A-Za-z ]+)/i);
-
- if(vsMatch){
-  return [vsMatch[1].trim(), vsMatch[2].trim()];
+ if(teams && teams.length >= 2){
+  return [teams[teams.length-2], teams[teams.length-1]];
  }
 
  return [];
 }
 
 
-// =======================
 // MATCH TITLE FORMAT
-// =======================
-
 function formatMatchTitle(match){
 
- const name = match.match_name || "";
+ let name = match.match_name || "";
 
- // match type detect
+ // Match type detect
  let matchType = name.match(/\d+(st|nd|rd|th)\s(Match|ODI|T20I|Test|T10)/i);
+
+ if(!matchType){
+  matchType = name.match(/\d+(st|nd|rd|th)\s(unofficial\s)?(ODI|T20I|Test|T10)/i);
+ }
 
  let title = matchType ? matchType[0] : "Match";
 
- // team detect
- const teams = detectTeams(name);
+ // Detect teams
+ let teams = detectTeams(name);
 
- if(teams.length === 2){
+ if(teams.length < 2){
+  teams = detectTeams(match.series_name);
+ }
 
+ if(teams.length >= 2){
   return `${title} . ${teams[0]} VS ${teams[1]}`;
-
  }
 
  return title;
-
 }
 
 
-// =======================
 // SCORE FORMAT
-// =======================
-
 function getScore(match){
 
  const name = formatMatchTitle(match);
-
  const status = match.status || "Live";
 
  return `${name}
@@ -95,14 +84,10 @@ ${status}
 
 1 Refresh
 0 Back`;
-
 }
 
 
-// =======================
-// MATCH LIST MENU
-// =======================
-
+// MATCH LIST
 function showMatches(session){
 
  const start = session.page * 5;
@@ -119,30 +104,21 @@ function showMatches(session){
  let menu = `${title}\n\n`;
 
  list.forEach((m,i)=>{
-
   const name = formatMatchTitle(m);
-
   menu += `${i+1}. ${name}\n`;
-
  });
 
  if(end < session.matches.length){
-
   menu += `9 More Matches\n`;
-
  }
 
  menu += `0 Back`;
 
  return menu;
-
 }
 
 
-// =======================
 // SMS LISTENER
-// =======================
-
 app.post("/sms_listener", async (req,res)=>{
 
  try{
@@ -155,7 +131,6 @@ app.post("/sms_listener", async (req,res)=>{
   }
 
   if(!sessions[user]){
-
    sessions[user] = {
     menu:"main",
     matches:[],
@@ -163,7 +138,6 @@ app.post("/sms_listener", async (req,res)=>{
     page:0,
     type:""
    };
-
   }
 
   const session = sessions[user];
@@ -175,7 +149,6 @@ app.post("/sms_listener", async (req,res)=>{
    session.page = 0;
 
    return res.send(config.menu.main);
-
   }
 
 
@@ -208,7 +181,6 @@ app.post("/sms_listener", async (req,res)=>{
    }
 
    return res.send(showMatches(session));
-
   }
 
 
@@ -234,11 +206,9 @@ app.post("/sms_listener", async (req,res)=>{
     session.menu = "score";
 
     return res.send(getScore(match));
-
    }
 
    return res.send("Invalid option\n\n0 Back");
-
   }
 
 
@@ -252,7 +222,6 @@ app.post("/sms_listener", async (req,res)=>{
     session.menu = "matches";
     return res.send(showMatches(session));
    }
-
   }
 
   return res.send(config.menu.default);
@@ -261,7 +230,6 @@ app.post("/sms_listener", async (req,res)=>{
 
   console.log("SMS Error:",err.message);
   res.send("Service temporarily unavailable");
-
  }
 
 });

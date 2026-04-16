@@ -43,37 +43,22 @@ async function fetchMatches(url){
 }
 
 // =======================
-// MATCH TYPE DETECT
+// DETECT MATCH TITLE
 // =======================
 
-function detectMatchType(name){
+function formatMatch(match){
 
- const m = name.match(/\d+(st|nd|rd|th)\s(Match|ODI|T20I|Test|T10)/i);
+ const name = match.match_name || match.name || "Match";
 
- if(m) return m[0];
+ const teams = name.split(" vs ");
 
- return "Match";
+ if(teams.length === 2){
 
-}
-
-// =======================
-// TEAM DETECT
-// =======================
-
-function detectTeams(name){
-
- const teams = name.match(/[A-Z][a-z]+(?:\s[A-Z][a-z]+)*/g);
-
- if(teams && teams.length >= 2){
-
-  return [
-   teams[teams.length-2],
-   teams[teams.length-1]
-  ];
+  return `${name}`;
 
  }
 
- return ["Team A","Team B"];
+ return name;
 
 }
 
@@ -83,7 +68,7 @@ function detectTeams(name){
 
 function parseDateTime(start){
 
- if(!start) return "";
+ if(!start) return {date:"",time:""};
 
  const d = new Date(start);
 
@@ -96,23 +81,7 @@ function parseDateTime(start){
   d.getHours()+":"+
   String(d.getMinutes()).padStart(2,"0");
 
- return `${date} - ${time}`;
-
-}
-
-// =======================
-// FORMAT MATCH
-// =======================
-
-function formatMatch(match){
-
- const name = match.match_name || "";
-
- const type = detectMatchType(name);
-
- const teams = detectTeams(name);
-
- return `${type} . ${teams[0]} VS ${teams[1]}`;
+ return {date,time};
 
 }
 
@@ -139,33 +108,7 @@ function showMatches(session){
 
   const name = formatMatch(m);
 
-  let info = "";
-
-  if(session.type === "upcoming"){
-
-   const dt = parseDateTime(m.start_date_time);
-
-   const venue = m.location || "";
-
-   info = `${venue}\n   ${dt}`;
-
-  }
-
-  if(session.type === "live"){
-
-   const venue = m.location || "";
-
-   info = `${venue}\n   Live`;
-
-  }
-
-  if(session.type === "recent"){
-
-   info = m.status || "";
-
-  }
-
-  menu += `${i+1}. ${name}\n   ${info}\n\n`;
+  menu += `${i+1}. ${name}\n`;
 
  });
 
@@ -182,28 +125,66 @@ function showMatches(session){
 }
 
 // =======================
-// SCORE FORMAT
+// FORMAT SCORE
 // =======================
 
-function getScore(match){
+function formatScore(match, type){
 
  const name = formatMatch(match);
 
- const venue = match.location || "";
-
- const status = match.status || "Live";
+ const venue = match.location || "Unknown";
 
  const dt = parseDateTime(match.start_date_time);
 
- return `${name}
+ let text = `Match Information\n\n${name}\n\n`;
 
-${venue}
-${dt}
+ // ================= LIVE =================
 
-${status}
+ if(type === "live"){
 
-1 Refresh
-0 Back`;
+  if(match.score){
+
+   text += `${match.score}\n\n`;
+
+  }
+
+  text += `Venue: ${venue}\n`;
+  text += `Status: Live\n\n`;
+
+ }
+
+ // ================= UPCOMING =================
+
+ else if(type === "upcoming"){
+
+  text += `Venue: ${venue}\n`;
+  text += `Date: ${dt.date}\n`;
+  text += `Time: ${dt.time}\n\n`;
+  text += `Upcoming\n\n`;
+
+ }
+
+ // ================= RECENT =================
+
+ else if(type === "recent"){
+
+  if(match.team1_score){
+   text += `${match.team1_score}\n`;
+  }
+
+  if(match.team2_score){
+   text += `${match.team2_score}\n\n`;
+  }
+
+  if(match.result){
+   text += `${match.result}\n\n`;
+  }
+
+ }
+
+ text += `1 Refresh\n0 Back`;
+
+ return text;
 
 }
 
@@ -247,7 +228,7 @@ app.post("/sms_listener", async (req,res)=>{
 
   }
 
-  // MAIN MENU
+  // ================= MAIN MENU =================
 
   if(session.menu === "main"){
 
@@ -291,7 +272,7 @@ app.post("/sms_listener", async (req,res)=>{
 
   }
 
-  // MATCH LIST
+  // ================= MATCH LIST =================
 
   if(session.menu === "matches"){
 
@@ -318,7 +299,7 @@ app.post("/sms_listener", async (req,res)=>{
     session.selectedMatch = match;
     session.menu = "score";
 
-    return res.send(getScore(match));
+    return res.send(formatScore(match, session.type));
 
    }
 
@@ -326,13 +307,13 @@ app.post("/sms_listener", async (req,res)=>{
 
   }
 
-  // SCORE MENU
+  // ================= SCORE MENU =================
 
   if(session.menu === "score"){
 
    if(message === "1"){
 
-    return res.send(getScore(session.selectedMatch));
+    return res.send(formatScore(session.selectedMatch, session.type));
 
    }
 
@@ -361,15 +342,11 @@ app.post("/sms_listener", async (req,res)=>{
 // =======================
 
 app.get("/",(req,res)=>{
-
  res.send("BDApps Cricket Server Running");
-
 });
 
 const PORT = process.env.PORT || config.server.port;
 
 app.listen(PORT,()=>{
-
  console.log("Server running on port",PORT);
-
 });

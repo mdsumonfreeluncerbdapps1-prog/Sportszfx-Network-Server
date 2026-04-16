@@ -11,8 +11,9 @@ app.use(express.urlencoded({ extended: true }));
 // API CONFIG
 // =======================
 
-const API_KEY = "5c9d00ec-b548-4929-bbec-ba3b86444270";
-const API_URL = "https://api.cricapi.com/v1";
+const LIVE_API = "https://cricbuzz.autoaiassistant.com/api.php?action=live&type=all";
+const UPCOMING_API = "https://cricbuzz.autoaiassistant.com/api.php?action=upcoming&type=all";
+const RECENT_API = "https://cricbuzz.autoaiassistant.com/api.php?action=recent&type=all";
 
 // =======================
 // SESSION
@@ -22,89 +23,16 @@ let sessions = {};
 const SESSION_LIMIT = 5000;
 
 // =======================
-// MATCH PRIORITY SYSTEM
-// =======================
-
-function getPriority(match){
-
- const name = (match.name || "").toLowerCase();
-
- if(match.matchStarted && !match.matchEnded){
-  return 0;
- }
-
- if(
-  name.includes("india") ||
-  name.includes("pakistan") ||
-  name.includes("bangladesh")
- ){
-  return 1;
- }
-
- if(name.includes("ipl") || name.includes("indian premier league")){
-  return 2;
- }
-
- if(name.includes("bpl") || name.includes("bangladesh premier league")){
-  return 3;
- }
-
- if(name.includes("world cup")){
-  return 4;
- }
-
- if(name.includes("asia cup")){
-  return 5;
- }
-
- const bigTeams = [
-  "australia",
-  "england",
-  "south africa",
-  "new zealand",
-  "sri lanka",
-  "afghanistan",
-  "west indies"
- ];
-
- if(bigTeams.some(t => name.includes(t))){
-  return 6;
- }
-
- return 20;
-}
-
-// =======================
 // FETCH MATCHES
 // =======================
 
-async function fetchAllMatches(){
+async function fetchMatches(url){
 
  try{
 
-  const res = await axios.get(`${API_URL}/matches?apikey=${API_KEY}`);
+  const res = await axios.get(url);
 
-  let matches = res.data.data || [];
-
-  // REMOVE SMALL LEAGUES
-  matches = matches.filter(m=>{
-   const n = (m.name || "").toLowerCase();
-
-   if(
-    n.includes("cyprus") ||
-    n.includes("malta") ||
-    n.includes("croatia") ||
-    n.includes("gibraltar")
-   ){
-    return false;
-   }
-
-   return true;
-  });
-
-  matches.sort((a,b)=> getPriority(a) - getPriority(b));
-
-  return matches;
+  return res.data || [];
 
  }catch(err){
 
@@ -116,42 +44,19 @@ async function fetchAllMatches(){
 }
 
 // =======================
-// FILTER MATCHES
-// =======================
-
-function getLive(matches){
- return matches.filter(m => m.matchStarted && !m.matchEnded);
-}
-
-function getUpcoming(matches){
- return matches.filter(m => !m.matchStarted);
-}
-
-function getRecent(matches){
- return matches.filter(m => m.matchEnded);
-}
-
-// =======================
 // SCORE FORMAT
 // =======================
 
 function getScore(match){
 
- const name = match.name || "Match";
+ const team1 = match.team1 || match.team1_name || match.home || "Team 1";
+ const team2 = match.team2 || match.team2_name || match.away || "Team 2";
 
- let score = "Score not available";
+ const name = `${team1} vs ${team2}`;
 
- if(match.score && match.score.length > 0){
+ const score = match.score || match.match_score || "Score not available";
 
-  const scores = match.score.map(
-   s => `${s.r}/${s.w} (${s.o} ov)`
-  );
-
-  score = scores.join(" | ");
-
- }
-
- const status = match.status || "";
+ const status = match.status || match.match_status || "";
 
  return `${name}
 
@@ -178,7 +83,12 @@ function showMatches(session){
  let menu = `Matches\n\n`;
 
  list.forEach((m,i)=>{
-  menu += `${i+1}. ${m.name}\n`;
+
+  const team1 = m.team1 || m.team1_name || m.home || "Team 1";
+  const team2 = m.team2 || m.team2_name || m.away || "Team 2";
+
+  menu += `${i+1}. ${team1} vs ${team2}\n`;
+
  });
 
  if(end < session.matches.length){
@@ -219,7 +129,7 @@ app.post("/sms_listener", async (req,res)=>{
 
   const session = sessions[user];
 
-  // START COMMAND
+  // START
 
   if(message.includes(config.app.shortcode)){
 
@@ -234,18 +144,16 @@ app.post("/sms_listener", async (req,res)=>{
 
   if(session.menu === "main"){
 
-   const all = await fetchAllMatches();
-
    if(message === "1"){
-    session.matches = getLive(all);
+    session.matches = await fetchMatches(LIVE_API);
    }
 
    else if(message === "2"){
-    session.matches = getUpcoming(all);
+    session.matches = await fetchMatches(UPCOMING_API);
    }
 
    else if(message === "3"){
-    session.matches = getRecent(all);
+    session.matches = await fetchMatches(RECENT_API);
    }
 
    else{

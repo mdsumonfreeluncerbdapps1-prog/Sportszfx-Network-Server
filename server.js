@@ -28,7 +28,6 @@ const SESSION_LIMIT = 5000;
 function getPriority(match){
 
  const name = (match.name || "").toLowerCase();
- const status = (match.status || "").toLowerCase();
 
  // LIVE MATCH FIRST
  if(match.matchStarted && !match.matchEnded){
@@ -79,15 +78,6 @@ function getPriority(match){
   return 6;
  }
 
- // SMALL LEAGUE
- if(
-  name.includes("cyprus") ||
-  name.includes("malta") ||
-  name.includes("croatia")
- ){
-  return 50;
- }
-
  return 20;
 
 }
@@ -103,6 +93,22 @@ async function fetchAllMatches(){
   const res = await axios.get(`${API_URL}/matches?apikey=${API_KEY}`);
 
   let matches = res.data.data || [];
+
+  // REMOVE SMALL LEAGUES
+  matches = matches.filter(m=>{
+   const n = (m.name || "").toLowerCase();
+
+   if(
+    n.includes("cyprus") ||
+    n.includes("malta") ||
+    n.includes("croatia") ||
+    n.includes("gibraltar")
+   ){
+    return false;
+   }
+
+   return true;
+  });
 
   matches.sort((a,b)=> getPriority(a) - getPriority(b));
 
@@ -123,31 +129,25 @@ async function fetchAllMatches(){
 
 function getLive(matches){
 
- const live = matches.filter(
-  m => m.matchStarted === true && m.matchEnded === false
+ return matches.filter(
+  m => m.matchStarted && !m.matchEnded
  );
-
- return live.sort((a,b)=> getPriority(a) - getPriority(b));
 
 }
 
 function getUpcoming(matches){
 
- const upcoming = matches.filter(
-  m => m.matchStarted === false
+ return matches.filter(
+  m => !m.matchStarted
  );
-
- return upcoming.sort((a,b)=> getPriority(a) - getPriority(b));
 
 }
 
 function getRecent(matches){
 
- const recent = matches.filter(
-  m => m.matchEnded === true
+ return matches.filter(
+  m => m.matchEnded
  );
-
- return recent.sort((a,b)=> getPriority(a) - getPriority(b));
 
 }
 
@@ -219,7 +219,7 @@ app.post("/sms_listener", async (req,res)=>{
 
  try{
 
-  const message = (req.body.message || "").trim().toLowerCase();
+  const message = (req.body.message || "").toLowerCase().trim();
   const user = req.body.sourceAddress || "demo";
 
   if(Object.keys(sessions).length > SESSION_LIMIT){
@@ -239,9 +239,9 @@ app.post("/sms_listener", async (req,res)=>{
 
   const session = sessions[user];
 
-  // START
+  // START COMMAND
 
-  if(message === config.app.shortcode || message === "cricketscoreupdate"){
+  if(message.includes("cricketscoreupdate")){
 
    session.menu = "main";
    session.page = 0;

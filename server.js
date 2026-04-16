@@ -40,7 +40,7 @@ async function fetchMatches(url){
 
  }catch(err){
 
-  console.log("API Error:", err.message);
+  console.log("API Error:",err.message);
   return [];
 
  }
@@ -55,26 +55,29 @@ function formatMatchTitle(match){
 
  let name = match.match_name || "";
 
- // detect match type
- let matchType = name.match(/\d+(st|nd|rd|th)\s(Match|ODI|T20I|Test)/i);
+ // Match type detect (ODI / T20I / Test / T10 / Match)
+ let matchType = name.match(/\d+(st|nd|rd|th)\s(Match|ODI|T20I|Test|T10)/i);
 
  if(!matchType){
-  matchType = name.match(/\d+(st|nd|rd|th)\s(unofficial\s)?(ODI|T20I|Test)/i);
+  matchType = name.match(/\d+(st|nd|rd|th)\s(unofficial\s)?(ODI|T20I|Test|T10)/i);
  }
 
  let title = matchType ? matchType[0] : "Match";
 
- // detect team codes (MI, PBKS etc)
+ // Team code detect (BAN NZ MI PBKS etc)
  let teams = name.match(/[A-Z]{2,4}/g);
 
- if(!teams || teams.length < 2){
-  return title;
+ if(teams && teams.length >= 2){
+
+  let team1 = teams[teams.length - 2];
+  let team2 = teams[teams.length - 1];
+
+  return `${title} . ${team1} VS ${team2}`;
+
  }
 
- let team1 = teams[0];
- let team2 = teams[1];
+ return title;
 
- return `${title} . ${team1} VS ${team2}`;
 }
 
 // =======================
@@ -265,7 +268,7 @@ app.post("/sms_listener", async (req,res)=>{
 
  }catch(err){
 
-  console.log("SMS Error:", err.message);
+  console.log("SMS Error:",err.message);
   res.send("Service temporarily unavailable");
 
  }
@@ -277,15 +280,11 @@ app.post("/sms_listener", async (req,res)=>{
 // =======================
 
 app.get("/",(req,res)=>{
-
  res.send("BDApps Cricket Server Running");
-
 });
 
 const PORT = process.env.PORT || config.server.port;
 
 app.listen(PORT,()=>{
-
  console.log("Server running on port",PORT);
-
 });

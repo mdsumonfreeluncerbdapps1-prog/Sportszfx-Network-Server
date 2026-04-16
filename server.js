@@ -22,7 +22,6 @@ const RECENT_API = "https://cricbuzz.autoaiassistant.com/api.php?action=recent&t
 let sessions = {};
 const SESSION_LIMIT = 5000;
 
-
 // =======================
 // FETCH MATCHES
 // =======================
@@ -36,50 +35,73 @@ async function fetchMatches(url){
 
  }catch(err){
 
-  console.log("API Error:", err.message);
+  console.log("API Error:",err.message);
   return [];
 
  }
 
 }
 
-
 // =======================
 // MATCH TYPE DETECT
 // =======================
 
-function detectMatchType(text){
+function detectMatchType(name){
 
- const type = text.match(/\d+(st|nd|rd|th)\s(Match|ODI|T20I|Test|T10)/i);
+ const m = name.match(/\d+(st|nd|rd|th)\s(Match|ODI|T20I|Test|T10)/i);
 
- if(type) return type[0];
+ if(m) return m[0];
 
  return "Match";
 
 }
 
-
 // =======================
 // TEAM DETECT
 // =======================
 
-function detectTeams(text){
+function detectTeams(name){
 
- const teams = text.match(/[A-Z][a-z]+(?:\s[A-Z][a-z]+)*/g);
+ const teams = name.match(/[A-Z][a-z]+(?:\s[A-Z][a-z]+)*/g);
 
  if(teams && teams.length >= 2){
 
-  return [teams[teams.length-2], teams[teams.length-1]];
+  return [
+   teams[teams.length-2],
+   teams[teams.length-1]
+  ];
 
  }
 
- return [];
+ return ["Team A","Team B"];
 
 }
 
+// =======================
+// DATE TIME PARSE
+// =======================
+
+function parseDateTime(start){
+
+ if(!start) return "";
+
+ const d = new Date(start);
+
+ const date =
+  d.getDate()+" "+
+  d.toLocaleString("en",{month:"short"})+
+  " "+d.getFullYear();
+
+ const time =
+  d.getHours()+":"+
+  String(d.getMinutes()).padStart(2,"0");
+
+ return `${date} - ${time}`;
+
+}
 
 // =======================
-// FORMAT MATCH TITLE
+// FORMAT MATCH
 // =======================
 
 function formatMatch(match){
@@ -90,36 +112,9 @@ function formatMatch(match){
 
  const teams = detectTeams(name);
 
- if(teams.length === 2){
-
-  return `${type} . ${teams[0]} VS ${teams[1]}`;
-
- }
-
- return type;
+ return `${type} . ${teams[0]} VS ${teams[1]}`;
 
 }
-
-
-// =======================
-// SCORE FORMAT
-// =======================
-
-function getScore(match){
-
- const name = formatMatch(match);
-
- const status = match.status || "Live";
-
- return `${name}
-
-${status}
-
-1 Refresh
-0 Back`;
-
-}
-
 
 // =======================
 // SHOW MATCH LIST
@@ -144,7 +139,33 @@ function showMatches(session){
 
   const name = formatMatch(m);
 
-  menu += `${i+1}. ${name}\n`;
+  let info = "";
+
+  if(session.type === "upcoming"){
+
+   const dt = parseDateTime(m.start_date_time);
+
+   const venue = m.location || "";
+
+   info = `${venue}\n   ${dt}`;
+
+  }
+
+  if(session.type === "live"){
+
+   const venue = m.location || "";
+
+   info = `${venue}\n   Live`;
+
+  }
+
+  if(session.type === "recent"){
+
+   info = m.status || "";
+
+  }
+
+  menu += `${i+1}. ${name}\n   ${info}\n\n`;
 
  });
 
@@ -160,6 +181,31 @@ function showMatches(session){
 
 }
 
+// =======================
+// SCORE FORMAT
+// =======================
+
+function getScore(match){
+
+ const name = formatMatch(match);
+
+ const venue = match.location || "";
+
+ const status = match.status || "Live";
+
+ const dt = parseDateTime(match.start_date_time);
+
+ return `${name}
+
+${venue}
+${dt}
+
+${status}
+
+1 Refresh
+0 Back`;
+
+}
 
 // =======================
 // SMS LISTENER
@@ -179,21 +225,18 @@ app.post("/sms_listener", async (req,res)=>{
   if(!sessions[user]){
 
    sessions[user] = {
-
     menu:"main",
     matches:[],
     selectedMatch:null,
     page:0,
     type:""
-
    };
 
   }
 
   const session = sessions[user];
 
-
-  // START COMMAND
+  // START
 
   if(message.includes(config.app.shortcode)){
 
@@ -203,7 +246,6 @@ app.post("/sms_listener", async (req,res)=>{
    return res.send(config.menu.main);
 
   }
-
 
   // MAIN MENU
 
@@ -249,7 +291,6 @@ app.post("/sms_listener", async (req,res)=>{
 
   }
 
-
   // MATCH LIST
 
   if(session.menu === "matches"){
@@ -285,7 +326,6 @@ app.post("/sms_listener", async (req,res)=>{
 
   }
 
-
   // SCORE MENU
 
   if(session.menu === "score"){
@@ -305,7 +345,6 @@ app.post("/sms_listener", async (req,res)=>{
 
   }
 
-
   return res.send(config.menu.default);
 
  }catch(err){
@@ -316,7 +355,6 @@ app.post("/sms_listener", async (req,res)=>{
  }
 
 });
-
 
 // =======================
 // SERVER

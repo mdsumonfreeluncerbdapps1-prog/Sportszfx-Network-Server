@@ -44,13 +44,43 @@ async function fetchMatches(url){
 }
 
 // =======================
-// SCORE FORMAT (WITH OVER)
+// TEAM NAME DETECTOR
+// =======================
+
+function getTeam1(match){
+
+ return (
+  match.team1 ||
+  match.team1_name ||
+  match.home ||
+  match.homeTeam ||
+  match.team_a ||
+  "Team 1"
+ );
+
+}
+
+function getTeam2(match){
+
+ return (
+  match.team2 ||
+  match.team2_name ||
+  match.away ||
+  match.awayTeam ||
+  match.team_b ||
+  "Team 2"
+ );
+
+}
+
+// =======================
+// SCORE FORMAT
 // =======================
 
 function getScore(match){
 
- const team1 = match.team1 || match.team1_name || match.home || "Team 1";
- const team2 = match.team2 || match.team2_name || match.away || "Team 2";
+ const team1 = getTeam1(match);
+ const team2 = getTeam2(match);
 
  const name = `${team1} vs ${team2}`;
 
@@ -60,7 +90,6 @@ function getScore(match){
   match.overs ||
   match.over ||
   match.current_over ||
-  match.over_summary ||
   "";
 
  const status = match.status || match.match_status || "";
@@ -97,8 +126,8 @@ function showMatches(session){
 
  list.forEach((m,i)=>{
 
-  const team1 = m.team1 || m.team1_name || m.home || "Team 1";
-  const team2 = m.team2 || m.team2_name || m.away || "Team 2";
+  const team1 = getTeam1(m);
+  const team2 = getTeam2(m);
 
   menu += `${i+1}. ${team1} vs ${team2}\n`;
 
@@ -228,9 +257,7 @@ app.post("/sms_listener", async (req,res)=>{
   if(session.menu === "score"){
 
    if(message === "1"){
-
     return res.send(getScore(session.selectedMatch));
-
    }
 
    if(message === "0"){

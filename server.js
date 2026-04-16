@@ -20,6 +20,7 @@ const UPCOMING_API =
 const RECENT_API =
 "https://cricbuzz.autoaiassistant.com/api.php?action=recent&type=all";
 
+
 // =======================
 // SESSION
 // =======================
@@ -36,16 +37,35 @@ function parseMatch(match){
 
  const name = match.match_name || "";
 
- let typeMatch =
- name.match(/(\d+(st|nd|rd|th)\sMatch|\d+(st|nd|rd|th)\sODI|\d+(st|nd|rd|th)\sT20I|\d+(st|nd|rd|th)\sTest|\d+(st|nd|rd|th)\sT10)/i);
+ // Detect match type
+ const typeMatch = name.match(/(\d+(st|nd|rd|th)\sMatch|\d+(st|nd|rd|th)\sODI|\d+(st|nd|rd|th)\sT20I|\d+(st|nd|rd|th)\sTest|\d+(st|nd|rd|th)\sT10)/i);
 
- let teamsMatch =
- name.match(/([A-Za-z ]+)\s+vs\s+([A-Za-z ]+)/i);
+ const matchType = typeMatch ? typeMatch[0] : "Match";
 
- let matchType = typeMatch ? typeMatch[0] : "Match";
+ let team1 = "";
+ let team2 = "";
 
- let team1 = teamsMatch ? teamsMatch[1].trim() : "";
- let team2 = teamsMatch ? teamsMatch[2].trim() : "";
+ // Detect VS
+ const vsMatch = name.match(/([A-Za-z ]+)\s+vs\s+([A-Za-z ]+)/i);
+
+ if(vsMatch){
+
+  team1 = vsMatch[1].trim();
+  team2 = vsMatch[2].trim();
+
+ }else{
+
+  const words = name.split(" ");
+  team1 = words[words.length-2] || "";
+  team2 = words[words.length-1] || "";
+
+ }
+
+ // Short team name
+ const short = t => t.split(" ").map(w=>w[0]).join("").toUpperCase();
+
+ team1 = short(team1);
+ team2 = short(team2);
 
  return `${matchType} . ${team1} VS ${team2}`;
 }
@@ -61,9 +81,9 @@ async function fetchMatches(type){
 
   let url;
 
-  if(type === "live") url = LIVE_API;
-  if(type === "upcoming") url = UPCOMING_API;
-  if(type === "recent") url = RECENT_API;
+  if(type==="live") url = LIVE_API;
+  if(type==="upcoming") url = UPCOMING_API;
+  if(type==="recent") url = RECENT_API;
 
   const res = await axios.get(url);
 
@@ -85,8 +105,8 @@ async function fetchMatches(type){
 
 function showMatches(session,title){
 
- const start = session.page * 5;
- const end = start + 5;
+ const start = session.page*5;
+ const end = start+5;
 
  const list = session.matches.slice(start,end);
 
@@ -101,7 +121,9 @@ function showMatches(session,title){
  });
 
  if(end < session.matches.length){
+
   menu += `\n9 More Matches\n`;
+
  }
 
  menu += `0 Back`;
@@ -158,7 +180,9 @@ app.post("/sms_listener", async (req,res)=>{
   const user = req.body.sourceAddress || "demo";
 
   if(Object.keys(sessions).length > SESSION_LIMIT){
+
    sessions = {};
+
   }
 
   if(!sessions[user]){
@@ -168,7 +192,8 @@ app.post("/sms_listener", async (req,res)=>{
     menu:"main",
     matches:[],
     selected:null,
-    page:0
+    page:0,
+    type:""
 
    };
 
@@ -197,8 +222,8 @@ app.post("/sms_listener", async (req,res)=>{
 
     session.matches = await fetchMatches("live");
     session.menu="matches";
-    session.type="Live Matches";
     session.page=0;
+    session.type="Live Matches";
 
     return res.send(showMatches(session,"Live Matches"));
 
@@ -208,8 +233,8 @@ app.post("/sms_listener", async (req,res)=>{
 
     session.matches = await fetchMatches("upcoming");
     session.menu="matches";
-    session.type="Upcoming Matches";
     session.page=0;
+    session.type="Upcoming Matches";
 
     return res.send(showMatches(session,"Upcoming Matches"));
 
@@ -219,8 +244,8 @@ app.post("/sms_listener", async (req,res)=>{
 
     session.matches = await fetchMatches("recent");
     session.menu="matches";
-    session.type="Recent Matches";
     session.page=0;
+    session.type="Recent Matches";
 
     return res.send(showMatches(session,"Recent Matches"));
 
@@ -238,6 +263,7 @@ app.post("/sms_listener", async (req,res)=>{
    if(message==="0"){
 
     session.menu="main";
+
     return res.send(config.menu.main);
 
    }
@@ -306,7 +332,9 @@ app.post("/sms_listener", async (req,res)=>{
 // =======================
 
 app.get("/",(req,res)=>{
+
  res.send("Cricket Server Running");
+
 });
 
 
@@ -317,5 +345,7 @@ app.get("/",(req,res)=>{
 const PORT = process.env.PORT || config.server.port;
 
 app.listen(PORT,()=>{
+
  console.log("Server running on port",PORT);
+
 });

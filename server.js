@@ -8,7 +8,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // =======================
-// API ENDPOINTS
+// API
 // =======================
 
 const LIVE_API =
@@ -20,9 +20,9 @@ const UPCOMING_API =
 const RECENT_API =
 "https://cricbuzz.autoaiassistant.com/api.php?action=recent&type=all";
 
-// match detail API (match_id)
 const DETAIL_API =
 "https://cricbuzz.autoaiassistant.com/api.php?action=match&id=";
+
 
 // =======================
 // SESSION
@@ -30,6 +30,7 @@ const DETAIL_API =
 
 let sessions = {};
 const SESSION_LIMIT = 5000;
+
 
 // =======================
 // FETCH MATCH LIST
@@ -40,7 +41,6 @@ async function fetchMatches(url) {
  try {
 
   const res = await axios.get(url);
-
   return res.data || [];
 
  } catch (err) {
@@ -52,63 +52,79 @@ async function fetchMatches(url) {
 
 }
 
+
 // =======================
 // FETCH MATCH DETAIL
 // =======================
 
-async function fetchMatchDetail(matchId){
+async function fetchMatchDetail(id) {
 
- try{
+ try {
 
-  const res = await axios.get(`${DETAIL_API}${matchId}`);
-
+  const res = await axios.get(`${DETAIL_API}${id}`);
   return res.data || {};
 
- }catch(err){
+ } catch (err) {
 
-  console.log("Detail API Error:",err.message);
+  console.log("Detail API Error:", err.message);
   return {};
 
  }
 
 }
 
+
 // =======================
-// FORMAT MATCH TITLE
+// SHORT MATCH NAME
 // =======================
 
-function matchTitle(match){
+function shortMatch(match) {
 
- return match.match_name || match.name || "Match";
+ const name = match.match_name || "";
+
+ const matchType = name.match(/(\d+(st|nd|rd|th)\sMatch|\d+(st|nd|rd|th)\sODI|\d+(st|nd|rd|th)\sT20I|\d+(st|nd|rd|th)\sTest)/i);
+
+ const type = matchType ? matchType[0] : "Match";
+
+ const teams = name.match(/[A-Z]{2,3}/g);
+
+ if (teams && teams.length >= 2) {
+
+  return `${type} . ${teams[0]} VS ${teams[1]}`;
+
+ }
+
+ return type;
 
 }
+
 
 // =======================
 // SHOW MATCH LIST
 // =======================
 
-function showMatches(session){
+function showMatches(session) {
 
  const start = session.page * 5;
  const end = start + 5;
 
- const list = session.matches.slice(start,end);
+ const list = session.matches.slice(start, end);
 
  let title = "Matches";
 
- if(session.type === "live") title = "Live Matches";
- if(session.type === "upcoming") title = "Upcoming Matches";
- if(session.type === "recent") title = "Recent Matches";
+ if (session.type === "live") title = "Live Matches";
+ if (session.type === "upcoming") title = "Upcoming Matches";
+ if (session.type === "recent") title = "Recent Matches";
 
  let menu = `${title}\n\n`;
 
- list.forEach((m,i)=>{
+ list.forEach((m, i) => {
 
-  menu += `${i+1}. ${matchTitle(m)}\n`;
+  menu += `${i + 1}. ${shortMatch(m)}\n`;
 
  });
 
- if(end < session.matches.length){
+ if (end < session.matches.length) {
 
   menu += `9 More Matches\n`;
 
@@ -120,62 +136,49 @@ function showMatches(session){
 
 }
 
+
 // =======================
-// FORMAT MATCH INFO
+// MATCH INFORMATION
 // =======================
 
-function formatMatchInfo(match,type){
+function matchInfo(match, type) {
 
  let text = `Match Information\n\n`;
 
- const name = match.match_name || "";
+ text += `${shortMatch(match)}\n\n`;
 
- const team1 = match.team1_score || "";
- const team2 = match.team2_score || "";
+ const venue = match.location || "Unknown";
 
- const venue = match.location || "";
+ if (match.score && match.score.length) {
 
- const status = match.status || "";
+  match.score.forEach(s => {
 
- text += `${name}\n\n`;
+   text += `${s}\n`;
 
- // live
+  });
 
- if(type === "live"){
-
-  if(team1) text += `${team1}\n`;
-  if(team2) text += `${team2}\n\n`;
-
-  text += `Venue: ${venue}\n`;
-  text += `Status: Live\n\n`;
+  text += "\n";
 
  }
 
- // upcoming
+ text += `Venue: ${venue}\n`;
 
- else if(type === "upcoming"){
+ if (type === "live") {
 
-  const date = match.start_date_time || "";
+  text += `Live\n\n`;
 
-  text += `Venue: ${venue}\n`;
-  text += `Date: ${date}\n\n`;
+ }
 
+ else if (type === "upcoming") {
+
+  text += `Date: ${match.start_date_time}\n`;
   text += `Upcoming\n\n`;
 
  }
 
- // recent
+ else if (type === "recent") {
 
- else if(type === "recent"){
-
-  if(team1) text += `${team1}\n`;
-  if(team2) text += `${team2}\n\n`;
-
-  if(match.result){
-
-   text += `${match.result}\n\n`;
-
-  }
+  text += `${match.status}\n\n`;
 
  }
 
@@ -185,42 +188,42 @@ function formatMatchInfo(match,type){
 
 }
 
+
 // =======================
 // SMS LISTENER
 // =======================
 
-app.post("/sms_listener", async (req,res)=>{
+app.post("/sms_listener", async (req, res) => {
 
- try{
+ try {
 
   const message = (req.body.message || "").trim().toLowerCase();
   const user = req.body.sourceAddress || "demo";
 
-  if(Object.keys(sessions).length > SESSION_LIMIT){
+  if (Object.keys(sessions).length > SESSION_LIMIT) {
 
    sessions = {};
 
   }
 
-  if(!sessions[user]){
+  if (!sessions[user]) {
 
    sessions[user] = {
-
-    menu:"main",
-    matches:[],
-    selectedMatch:null,
-    page:0,
-    type:""
-
+    menu: "main",
+    matches: [],
+    selected: null,
+    page: 0,
+    type: ""
    };
 
   }
 
   const session = sessions[user];
 
-  // start command
 
-  if(message.includes(config.app.shortcode)){
+  // START
+
+  if (message.includes(config.app.shortcode)) {
 
    session.menu = "main";
    session.page = 0;
@@ -229,32 +232,33 @@ app.post("/sms_listener", async (req,res)=>{
 
   }
 
-  // ================= MAIN MENU =================
 
-  if(session.menu === "main"){
+  // MAIN MENU
 
-   if(message === "1"){
+  if (session.menu === "main") {
+
+   if (message === "1") {
 
     session.matches = await fetchMatches(LIVE_API);
     session.type = "live";
 
    }
 
-   else if(message === "2"){
+   else if (message === "2") {
 
     session.matches = await fetchMatches(UPCOMING_API);
     session.type = "upcoming";
 
    }
 
-   else if(message === "3"){
+   else if (message === "3") {
 
     session.matches = await fetchMatches(RECENT_API);
     session.type = "recent";
 
    }
 
-   else{
+   else {
 
     return res.send(config.menu.default);
 
@@ -263,50 +267,43 @@ app.post("/sms_listener", async (req,res)=>{
    session.menu = "matches";
    session.page = 0;
 
-   if(session.matches.length === 0){
-
-    return res.send("No matches available\n\n0 Back");
-
-   }
-
    return res.send(showMatches(session));
 
   }
 
-  // ================= MATCH LIST =================
 
-  if(session.menu === "matches"){
+  // MATCH LIST
 
-   if(message === "0"){
+  if (session.menu === "matches") {
+
+   if (message === "0") {
 
     session.menu = "main";
-
     return res.send(config.menu.main);
 
    }
 
-   if(message === "9"){
+   if (message === "9") {
 
     session.page++;
-
     return res.send(showMatches(session));
 
    }
 
-   const index = (session.page*5) + (parseInt(message)-1);
+   const index = (session.page * 5) + (parseInt(message) - 1);
 
-   if(session.matches[index]){
+   if (session.matches[index]) {
 
     const match = session.matches[index];
 
-    const matchId = match.match_id || match.id;
+    const matchId = match.match_id;
 
     const detail = await fetchMatchDetail(matchId);
 
-    session.selectedMatch = detail;
-    session.menu = "score";
+    session.selected = detail;
+    session.menu = "info";
 
-    return res.send(formatMatchInfo(detail,session.type));
+    return res.send(matchInfo(detail, session.type));
 
    }
 
@@ -314,22 +311,20 @@ app.post("/sms_listener", async (req,res)=>{
 
   }
 
-  // ================= MATCH INFO =================
 
-  if(session.menu === "score"){
+  // MATCH INFO
 
-   if(message === "1"){
+  if (session.menu === "info") {
 
-    return res.send(
-     formatMatchInfo(session.selectedMatch,session.type)
-    );
+   if (message === "1") {
+
+    return res.send(matchInfo(session.selected, session.type));
 
    }
 
-   if(message === "0"){
+   if (message === "0") {
 
     session.menu = "matches";
-
     return res.send(showMatches(session));
 
    }
@@ -338,25 +333,26 @@ app.post("/sms_listener", async (req,res)=>{
 
   return res.send(config.menu.default);
 
- }catch(err){
+ } catch (err) {
 
-  console.log("SMS Error:",err.message);
-
+  console.log("SMS Error:", err.message);
   res.send("Service temporarily unavailable");
 
  }
 
 });
 
+
 // =======================
 // HEALTH CHECK
 // =======================
 
-app.get("/",(req,res)=>{
+app.get("/", (req, res) => {
 
  res.send("BDApps Cricket Server Running");
 
 });
+
 
 // =======================
 // SERVER START
@@ -364,8 +360,8 @@ app.get("/",(req,res)=>{
 
 const PORT = process.env.PORT || config.server.port;
 
-app.listen(PORT,()=>{
+app.listen(PORT, () => {
 
- console.log("Server running on port",PORT);
+ console.log("Server running on port", PORT);
 
 });

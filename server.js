@@ -29,12 +29,10 @@ function getPriority(match){
 
  const name = (match.name || "").toLowerCase();
 
- // LIVE MATCH FIRST
  if(match.matchStarted && !match.matchEnded){
   return 0;
  }
 
- // INDIA / PAKISTAN / BANGLADESH
  if(
   name.includes("india") ||
   name.includes("pakistan") ||
@@ -43,27 +41,22 @@ function getPriority(match){
   return 1;
  }
 
- // IPL
- if(name.includes("indian premier league") || name.includes("ipl")){
+ if(name.includes("ipl") || name.includes("indian premier league")){
   return 2;
  }
 
- // BPL
- if(name.includes("bangladesh premier league") || name.includes("bpl")){
+ if(name.includes("bpl") || name.includes("bangladesh premier league")){
   return 3;
  }
 
- // WORLD CUP
  if(name.includes("world cup")){
   return 4;
  }
 
- // ASIA CUP
  if(name.includes("asia cup")){
   return 5;
  }
 
- // INTERNATIONAL TEAMS
  const bigTeams = [
   "australia",
   "england",
@@ -79,7 +72,6 @@ function getPriority(match){
  }
 
  return 20;
-
 }
 
 // =======================
@@ -128,27 +120,15 @@ async function fetchAllMatches(){
 // =======================
 
 function getLive(matches){
-
- return matches.filter(
-  m => m.matchStarted && !m.matchEnded
- );
-
+ return matches.filter(m => m.matchStarted && !m.matchEnded);
 }
 
 function getUpcoming(matches){
-
- return matches.filter(
-  m => !m.matchStarted
- );
-
+ return matches.filter(m => !m.matchStarted);
 }
 
 function getRecent(matches){
-
- return matches.filter(
-  m => m.matchEnded
- );
-
+ return matches.filter(m => m.matchEnded);
 }
 
 // =======================
@@ -241,7 +221,7 @@ app.post("/sms_listener", async (req,res)=>{
 
   // START COMMAND
 
-  if(message.includes("cricketscoreupdate")){
+  if(message.includes(config.app.shortcode)){
 
    session.menu = "main";
    session.page = 0;

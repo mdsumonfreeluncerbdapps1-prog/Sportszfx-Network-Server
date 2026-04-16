@@ -7,55 +7,48 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// =======================
 // API LINKS
-// =======================
-
-const LIVE_API =
-"https://cricbuzz.autoaiassistant.com/api.php?action=live&type=all";
-
-const UPCOMING_API =
-"https://cricbuzz.autoaiassistant.com/api.php?action=upcoming&type=all";
-
-const RECENT_API =
-"https://cricbuzz.autoaiassistant.com/api.php?action=recent&type=all";
-
-// =======================
-// SESSION
-// =======================
+const LIVE_API = "https://cricbuzz.autoaiassistant.com/api.php?action=live&type=all";
+const UPCOMING_API = "https://cricbuzz.autoaiassistant.com/api.php?action=upcoming&type=all";
+const RECENT_API = "https://cricbuzz.autoaiassistant.com/api.php?action=recent&type=all";
 
 let sessions = {};
 const SESSION_LIMIT = 5000;
 
-// =======================
+
 // FETCH MATCHES
-// =======================
-
 async function fetchMatches(url){
-
  try{
-
   const res = await axios.get(url);
   return res.data || [];
-
  }catch(err){
-
   console.log("API Error:",err.message);
   return [];
-
  }
-
 }
 
-// =======================
-// MATCH TITLE FORMAT
-// =======================
 
+// TEAM DETECTOR
+function detectTeams(text){
+
+ if(!text) return [];
+
+ const teams = text.match(/[A-Z]{2,4}/g);
+
+ if(teams && teams.length >= 2){
+  return [teams[teams.length-2], teams[teams.length-1]];
+ }
+
+ return [];
+}
+
+
+// MATCH TITLE FORMAT
 function formatMatchTitle(match){
 
  let name = match.match_name || "";
 
- // Match type detect (ODI / T20I / Test / T10 / Match)
+ // Match type detect
  let matchType = name.match(/\d+(st|nd|rd|th)\s(Match|ODI|T20I|Test|T10)/i);
 
  if(!matchType){
@@ -64,26 +57,22 @@ function formatMatchTitle(match){
 
  let title = matchType ? matchType[0] : "Match";
 
- // Team code detect (BAN NZ MI PBKS etc)
- let teams = name.match(/[A-Z]{2,4}/g);
+ // Detect teams
+ let teams = detectTeams(name);
 
- if(teams && teams.length >= 2){
+ if(teams.length < 2){
+  teams = detectTeams(match.series_name);
+ }
 
-  let team1 = teams[teams.length - 2];
-  let team2 = teams[teams.length - 1];
-
-  return `${title} . ${team1} VS ${team2}`;
-
+ if(teams.length >= 2){
+  return `${title} . ${teams[0]} VS ${teams[1]}`;
  }
 
  return title;
-
 }
 
-// =======================
-// SCORE FORMAT
-// =======================
 
+// SCORE FORMAT
 function getScore(match){
 
  const name = formatMatchTitle(match);
@@ -95,13 +84,10 @@ ${status}
 
 1 Refresh
 0 Back`;
-
 }
 
-// =======================
-// MATCH LIST MENU
-// =======================
 
+// MATCH LIST
 function showMatches(session){
 
  const start = session.page * 5;
@@ -118,10 +104,8 @@ function showMatches(session){
  let menu = `${title}\n\n`;
 
  list.forEach((m,i)=>{
-
   const name = formatMatchTitle(m);
   menu += `${i+1}. ${name}\n`;
-
  });
 
  if(end < session.matches.length){
@@ -131,13 +115,10 @@ function showMatches(session){
  menu += `0 Back`;
 
  return menu;
-
 }
 
-// =======================
-// SMS LISTENER
-// =======================
 
+// SMS LISTENER
 app.post("/sms_listener", async (req,res)=>{
 
  try{
@@ -150,7 +131,6 @@ app.post("/sms_listener", async (req,res)=>{
   }
 
   if(!sessions[user]){
-
    sessions[user] = {
     menu:"main",
     matches:[],
@@ -158,12 +138,10 @@ app.post("/sms_listener", async (req,res)=>{
     page:0,
     type:""
    };
-
   }
 
   const session = sessions[user];
 
-  // START
 
   if(message.includes(config.app.shortcode)){
 
@@ -171,10 +149,8 @@ app.post("/sms_listener", async (req,res)=>{
    session.page = 0;
 
    return res.send(config.menu.main);
-
   }
 
-  // MAIN MENU
 
   if(session.menu === "main"){
 
@@ -201,33 +177,23 @@ app.post("/sms_listener", async (req,res)=>{
    session.page = 0;
 
    if(session.matches.length === 0){
-
-    return res.send(`No matches available
-
-0 Back`);
-
+    return res.send("No matches available\n\n0 Back");
    }
 
    return res.send(showMatches(session));
-
   }
 
-  // MATCH LIST
 
   if(session.menu === "matches"){
 
    if(message === "0"){
-
     session.menu = "main";
     return res.send(config.menu.main);
-
    }
 
    if(message === "9"){
-
     session.page++;
     return res.send(showMatches(session));
-
    }
 
    const index = (session.page*5) + (parseInt(message)-1);
@@ -240,14 +206,11 @@ app.post("/sms_listener", async (req,res)=>{
     session.menu = "score";
 
     return res.send(getScore(match));
-
    }
 
    return res.send("Invalid option\n\n0 Back");
-
   }
 
-  // SCORE MENU
 
   if(session.menu === "score"){
 
@@ -256,12 +219,9 @@ app.post("/sms_listener", async (req,res)=>{
    }
 
    if(message === "0"){
-
     session.menu = "matches";
     return res.send(showMatches(session));
-
    }
-
   }
 
   return res.send(config.menu.default);
@@ -270,15 +230,12 @@ app.post("/sms_listener", async (req,res)=>{
 
   console.log("SMS Error:",err.message);
   res.send("Service temporarily unavailable");
-
  }
 
 });
 
-// =======================
-// SERVER
-// =======================
 
+// SERVER
 app.get("/",(req,res)=>{
  res.send("BDApps Cricket Server Running");
 });

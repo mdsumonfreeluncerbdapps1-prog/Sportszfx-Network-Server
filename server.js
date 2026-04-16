@@ -8,7 +8,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // =======================
-// API CONFIG
+// API LINKS
 // =======================
 
 const LIVE_API = "https://cricbuzz.autoaiassistant.com/api.php?action=live&type=all";
@@ -31,12 +31,11 @@ async function fetchMatches(url){
  try{
 
   const res = await axios.get(url);
-
   return res.data || [];
 
  }catch(err){
 
-  console.log("API Error:",err.message);
+  console.log("API Error:", err.message);
   return [];
 
  }
@@ -44,65 +43,25 @@ async function fetchMatches(url){
 }
 
 // =======================
-// TEAM NAME DETECTOR
+// MATCH TITLE
 // =======================
 
-function getTeam1(match){
+function getMatchTitle(match){
 
- return (
-  match.team1 ||
-  match.team1_name ||
-  match.home ||
-  match.homeTeam ||
-  match.team_a ||
-  "Team 1"
- );
-
-}
-
-function getTeam2(match){
-
- return (
-  match.team2 ||
-  match.team2_name ||
-  match.away ||
-  match.awayTeam ||
-  match.team_b ||
-  "Team 2"
- );
+ return match.match_name || "Match";
 
 }
 
 // =======================
-// SCORE FORMAT
+// SCORE SCREEN
 // =======================
 
 function getScore(match){
 
- const team1 = getTeam1(match);
- const team2 = getTeam2(match);
-
- const name = `${team1} vs ${team2}`;
-
- const score = match.score || match.match_score || "Score not available";
-
- const overs =
-  match.overs ||
-  match.over ||
-  match.current_over ||
-  "";
-
- const status = match.status || match.match_status || "";
-
- let scoreLine = score;
-
- if(overs){
-  scoreLine = `${score} (${overs} ov)`;
- }
+ const name = getMatchTitle(match);
+ const status = match.status || "";
 
  return `${name}
-
-Score: ${scoreLine}
 
 ${status}
 
@@ -112,7 +71,7 @@ ${status}
 }
 
 // =======================
-// MATCH LIST MENU
+// MATCH LIST
 // =======================
 
 function showMatches(session){
@@ -126,10 +85,7 @@ function showMatches(session){
 
  list.forEach((m,i)=>{
 
-  const team1 = getTeam1(m);
-  const team2 = getTeam2(m);
-
-  menu += `${i+1}. ${team1} vs ${team2}\n`;
+  menu += `${i+1}. ${getMatchTitle(m)}\n`;
 
  });
 
@@ -182,7 +138,9 @@ app.post("/sms_listener", async (req,res)=>{
 
   }
 
+  // =======================
   // MAIN MENU
+  // =======================
 
   if(session.menu === "main"){
 
@@ -217,7 +175,9 @@ app.post("/sms_listener", async (req,res)=>{
 
   }
 
+  // =======================
   // MATCH LIST
+  // =======================
 
   if(session.menu === "matches"){
 
@@ -235,7 +195,7 @@ app.post("/sms_listener", async (req,res)=>{
 
    }
 
-   const index = (session.page*5) + (parseInt(message)-1);
+   const index = (session.page * 5) + (parseInt(message) - 1);
 
    if(session.matches[index]){
 
@@ -252,7 +212,9 @@ app.post("/sms_listener", async (req,res)=>{
 
   }
 
+  // =======================
   // SCORE MENU
+  // =======================
 
   if(session.menu === "score"){
 
@@ -273,7 +235,7 @@ app.post("/sms_listener", async (req,res)=>{
 
  }catch(err){
 
-  console.log("SMS Error:",err.message);
+  console.log("SMS Error:", err.message);
   res.send("Service temporarily unavailable");
 
  }
@@ -281,19 +243,15 @@ app.post("/sms_listener", async (req,res)=>{
 });
 
 // =======================
-// HEALTH CHECK
+// SERVER
 // =======================
 
-app.get("/",(req,res)=>{
+app.get("/", (req,res)=>{
  res.send("BDApps Cricket Server Running");
 });
 
-// =======================
-// SERVER START
-// =======================
-
 const PORT = process.env.PORT || config.server.port;
 
-app.listen(PORT,()=>{
- console.log("Server running on port",PORT);
+app.listen(PORT, ()=>{
+ console.log("Server running on port", PORT);
 });

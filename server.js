@@ -33,7 +33,7 @@ const SESSION_LIMIT = 5000;
 
 
 // =======================
-// API CACHE (10x faster)
+// API CACHE
 // =======================
 
 let cache = {
@@ -42,7 +42,7 @@ let cache = {
  recent: { data: [], time: 0 }
 };
 
-const CACHE_TIME = 20000; // 20 seconds
+const CACHE_TIME = 20000;
 
 
 // =======================
@@ -56,9 +56,7 @@ async function fetchMatches(type, url){
   const now = Date.now();
 
   if(cache[type].data.length > 0 && now - cache[type].time < CACHE_TIME){
-
    return cache[type].data;
-
   }
 
   const res = await axios.get(url);
@@ -87,7 +85,6 @@ async function fetchMatchDetail(matchId){
  try{
 
   const res = await axios.get(`${DETAIL_API}${matchId}`);
-
   return res.data || {};
 
  }catch(err){
@@ -101,7 +98,7 @@ async function fetchMatchDetail(matchId){
 
 
 // =======================
-// BETTER MATCH TITLE PARSER
+// MATCH TITLE PARSER
 // =======================
 
 function matchTitle(match){
@@ -131,7 +128,7 @@ function matchTitle(match){
 
 
 // =======================
-// SHOW MATCH LIST
+// SHOW MATCH LIST (UPDATED)
 // =======================
 
 function showMatches(session){
@@ -156,9 +153,7 @@ function showMatches(session){
  });
 
  if(end < session.matches.length){
-
   menu += `9 More Matches\n`;
-
  }
 
  menu += `0 Back`;
@@ -177,9 +172,7 @@ function formatMatchInfo(match,type){
  let text = `Match Information\n\n`;
 
  const name = match.match_name || "";
-
  const venue = match.location || "";
-
  const score = match.score || [];
 
  text += `${name}\n\n`;
@@ -189,14 +182,16 @@ function formatMatchInfo(match,type){
   score.forEach(t=>{
 
    if(t.team_name && t.scores){
-
     text += `${t.team_name} ${t.scores[0] || ""}\n`;
-
    }
 
   });
 
   text += `\n`;
+
+ }else{
+
+  text += `Score: Not started\n\n`;
 
  }
 
@@ -219,9 +214,7 @@ function formatMatchInfo(match,type){
  if(type === "recent"){
 
   if(match.result){
-
    text += `${match.result}\n\n`;
-
   }
 
  }
@@ -245,21 +238,17 @@ app.post("/sms_listener", async (req,res)=>{
   const user = req.body.sourceAddress || "demo";
 
   if(Object.keys(sessions).length > SESSION_LIMIT){
-
    sessions = {};
-
   }
 
   if(!sessions[user]){
 
    sessions[user] = {
-
     menu:"main",
     matches:[],
     selectedMatch:null,
     page:0,
     type:""
-
    };
 
   }
@@ -267,7 +256,7 @@ app.post("/sms_listener", async (req,res)=>{
   const session = sessions[user];
 
 
-// START KEYWORD
+// ================= START KEYWORD =================
 
   if(message.includes(config.app.shortcode.toLowerCase())){
 
@@ -305,18 +294,14 @@ app.post("/sms_listener", async (req,res)=>{
    }
 
    else{
-
     return res.send(config.menu.default);
-
    }
 
    session.menu = "matches";
    session.page = 0;
 
    if(session.matches.length === 0){
-
     return res.send("No matches available\n\n0 Back");
-
    }
 
    return res.send(showMatches(session));
@@ -331,7 +316,6 @@ app.post("/sms_listener", async (req,res)=>{
    if(message === "0"){
 
     session.menu = "main";
-
     return res.send(config.menu.main);
 
    }
@@ -339,12 +323,11 @@ app.post("/sms_listener", async (req,res)=>{
    if(message === "9"){
 
     session.page++;
-
     return res.send(showMatches(session));
 
    }
 
-   const index = parseInt(message) - 1;
+   const index = session.page * 5 + (parseInt(message) - 1);
 
    if(session.matches[index]){
 
@@ -372,8 +355,16 @@ app.post("/sms_listener", async (req,res)=>{
 
    if(message === "1"){
 
+    const matchId =
+    session.selectedMatch.match_id ||
+    session.selectedMatch.id;
+
+    const detail = await fetchMatchDetail(matchId);
+
+    session.selectedMatch = detail;
+
     return res.send(
-     formatMatchInfo(session.selectedMatch,session.type)
+     formatMatchInfo(detail,session.type)
     );
 
    }
@@ -381,7 +372,6 @@ app.post("/sms_listener", async (req,res)=>{
    if(message === "0"){
 
     session.menu = "matches";
-
     return res.send(showMatches(session));
 
    }

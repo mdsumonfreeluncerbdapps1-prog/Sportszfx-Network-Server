@@ -43,7 +43,6 @@ async function fetchMatches(url){
   const res = await axios.get(url);
 
   if(Array.isArray(res.data)) return res.data;
-  if(res.data.data) return res.data.data;
 
   return [];
 
@@ -67,9 +66,7 @@ async function fetchMatchDetail(matchId){
 
   const res = await axios.get(`${DETAIL_API}${matchId}`);
 
-  if(res.data.data) return res.data.data;
-
-  return res.data;
+  return res.data || {};
 
  }catch(err){
 
@@ -89,22 +86,29 @@ function matchTitle(match){
 
  const name = match.match_name || "";
 
- // match type detect
+ // detect match type
  const typeMatch =
- name.match(/(\d+(st|nd|rd|th)\sMatch|\d+(st|nd|rd|th)\sODI|\d+(st|nd|rd|th)\sT20I|\d+(st|nd|rd|th)\sTest|\d+(st|nd|rd|th)\sT10)/i);
+ name.match(/(\d+(st|nd|rd|th)\sMatch|\d+(st|nd|rd|th)\sODI|\d+(st|nd|rd|th)\sT20I|\d+(st|nd|rd|th)\sTest|\d+(st|nd|rd|th)\sunofficial\sTest)/i);
 
  const matchType = typeMatch ? typeMatch[0] : "Match";
 
- // team detect
- const vsMatch = name.match(/([A-Za-z]+)\s+vs\s+([A-Za-z]+)/i);
+ // detect teams
+ const vsMatch = name.match(/([A-Za-z ]+)\s+vs\s+([A-Za-z ]+)/i);
 
  if(vsMatch){
 
-  const team1 = vsMatch[1].substring(0,3).toUpperCase();
-  const team2 = vsMatch[2].substring(0,3).toUpperCase();
+  const short = team =>
+   team.trim()
+   .split(" ")
+   .map(w => w[0])
+   .join("")
+   .toUpperCase()
+   .substring(0,3);
+
+  const team1 = short(vsMatch[1]);
+  const team2 = short(vsMatch[2]);
 
   return `${matchType} . ${team1} VS ${team2}`;
-
  }
 
  return matchType;
@@ -160,19 +164,12 @@ function formatMatchInfo(match,type){
 
  const name = match.match_name || "";
 
- const score1 = match.team1_score || "";
- const score2 = match.team2_score || "";
-
  const venue = match.location || "";
 
  text += `${name}\n\n`;
 
  if(type==="live"){
 
-  if(score1) text += `${score1}\n`;
-  if(score2) text += `${score2}\n\n`;
-
-  text += `Venue: ${venue}\n`;
   text += `Live\n\n`;
 
  }
@@ -188,9 +185,6 @@ function formatMatchInfo(match,type){
  }
 
  else if(type==="recent"){
-
-  if(score1) text += `${score1}\n`;
-  if(score2) text += `${score2}\n\n`;
 
   if(match.result){
 
@@ -325,7 +319,7 @@ app.post("/sms_listener", async (req,res)=>{
 
     const match=session.matches[index];
 
-    const matchId = match.match_id || match.id;
+    const matchId = match.match_id;
 
     const detail = await fetchMatchDetail(matchId);
 

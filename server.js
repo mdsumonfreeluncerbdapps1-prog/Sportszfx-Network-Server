@@ -46,6 +46,28 @@ const CACHE_TIME = 20000;
 
 
 // =======================
+// REMOVE DUPLICATE MATCHES
+// =======================
+
+function removeDuplicates(matches){
+
+ const seen = new Set();
+
+ return matches.filter(m => {
+
+  const key = m.match_id || m.id || m.match_name;
+
+  if(seen.has(key)) return false;
+
+  seen.add(key);
+  return true;
+
+ });
+
+}
+
+
+// =======================
 // FETCH MATCH LIST
 // =======================
 
@@ -61,7 +83,7 @@ async function fetchMatches(type, url){
 
   const res = await axios.get(url);
 
-  cache[type].data = res.data || [];
+  cache[type].data = removeDuplicates(res.data || []);
   cache[type].time = now;
 
   return cache[type].data;
@@ -98,28 +120,46 @@ async function fetchMatchDetail(matchId){
 
 
 // =======================
-// MATCH TITLE PARSER
+// UPDATED MATCH TITLE PARSER (TEAM FIELD SUPPORT)
 // =======================
 
 function matchTitle(match){
 
- const name = match.match_name || "";
+ const name = (match.match_name || "").toUpperCase();
 
  const typeMatch =
- name.match(/(\d+(st|nd|rd|th)\s(Test|ODI|T20I|Match))/i);
+ name.match(/(\d+(ST|ND|RD|TH)\s(TEST|ODI|T20I|MATCH))/i);
 
- const matchType = typeMatch ? typeMatch[0] : "Match";
+ const matchType = typeMatch ? typeMatch[0] : "MATCH";
 
- const teams =
- name.match(/([A-Z]{2,4})\s\d+[-\/]\d+.*?([A-Z]{2,4})/);
+ let team1 = "";
+ let team2 = "";
 
- if(teams){
+ // case 1: team1 team2 field
+ if(match.team1 && match.team2){
+  team1 = (match.team1.short_name || match.team1.name || "").toUpperCase();
+  team2 = (match.team2.short_name || match.team2.name || "").toUpperCase();
+ }
 
-  const team1 = teams[1];
-  const team2 = teams[2];
+ // case 2: teams array
+ else if(match.teams && match.teams.length >= 2){
+  team1 = (match.teams[0].short_name || match.teams[0].name || "").toUpperCase();
+  team2 = (match.teams[1].short_name || match.teams[1].name || "").toUpperCase();
+ }
 
+ // case 3: detect from match name
+ else{
+  const teamMatch =
+  name.match(/([A-Z]{2,4})\sVS\s([A-Z]{2,4})/i);
+
+  if(teamMatch){
+   team1 = teamMatch[1];
+   team2 = teamMatch[2];
+  }
+ }
+
+ if(team1 && team2){
   return `${matchType} . ${team1} VS ${team2}`;
-
  }
 
  return matchType;
@@ -128,7 +168,7 @@ function matchTitle(match){
 
 
 // =======================
-// SHOW MATCH LIST (UPDATED)
+// SHOW MATCH LIST
 // =======================
 
 function showMatches(session){
@@ -396,9 +436,7 @@ app.post("/sms_listener", async (req,res)=>{
 // =======================
 
 app.get("/",(req,res)=>{
-
  res.send("BDApps Cricket Server Running");
-
 });
 
 
@@ -409,9 +447,7 @@ app.get("/",(req,res)=>{
 const PORT = process.env.PORT || config.server.port;
 
 app.listen(PORT,()=>{
-
  console.log("Server running on port",PORT);
-
 });
 
 
@@ -420,13 +456,9 @@ app.listen(PORT,()=>{
 // =======================
 
 process.on("uncaughtException", err => {
-
  console.error("Uncaught Exception:", err);
-
 });
 
 process.on("unhandledRejection", err => {
-
  console.error("Unhandled Rejection:", err);
-
 });

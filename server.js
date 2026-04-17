@@ -20,9 +20,10 @@ const UPCOMING_API =
 const RECENT_API =
 "https://cricbuzz.autoaiassistant.com/api.php?action=recent&type=all";
 
-// match detail API (match_id)
+// match detail API
 const DETAIL_API =
 "https://cricbuzz.autoaiassistant.com/api.php?action=match&id=";
+
 
 // =======================
 // SESSION
@@ -31,19 +32,20 @@ const DETAIL_API =
 let sessions = {};
 const SESSION_LIMIT = 5000;
 
+
 // =======================
 // FETCH MATCH LIST
 // =======================
 
-async function fetchMatches(url) {
+async function fetchMatches(url){
 
- try {
+ try{
 
   const res = await axios.get(url);
 
   return res.data || [];
 
- } catch (err) {
+ }catch(err){
 
   console.log("API Error:", err.message);
   return [];
@@ -51,6 +53,7 @@ async function fetchMatches(url) {
  }
 
 }
+
 
 // =======================
 // FETCH MATCH DETAIL
@@ -73,15 +76,47 @@ async function fetchMatchDetail(matchId){
 
 }
 
+
 // =======================
-// FORMAT MATCH TITLE
+// SHORT MATCH TITLE
 // =======================
 
 function matchTitle(match){
 
- return match.match_name || match.name || "Match";
+ const name = match.match_name || "";
+
+ // detect match type
+ const typeMatch =
+ name.match(/(\d+(st|nd|rd|th)\sMatch|\d+(st|nd|rd|th)\sODI|\d+(st|nd|rd|th)\sT20I|\d+(st|nd|rd|th)\sTest|\d+(st|nd|rd|th)\sunofficial\sTest)/i);
+
+ const matchType = typeMatch ? typeMatch[0].replace("Match","Test") : "Match";
+
+
+ // detect team names from score pattern
+ const teamMatch =
+ name.match(/([A-Za-z ]+)\s\d+[-\/]\d+.*?([A-Za-z ]+)\sDay/i);
+
+ if(teamMatch){
+
+  const short = team =>
+   team.trim()
+   .split(" ")
+   .map(w => w[0])
+   .join("")
+   .toUpperCase()
+   .substring(0,3);
+
+  const team1 = short(teamMatch[1]);
+  const team2 = short(teamMatch[2]);
+
+  return `${matchType} . ${team1} VS ${team2}`;
+
+ }
+
+ return matchType;
 
 }
+
 
 // =======================
 // SHOW MATCH LIST
@@ -120,8 +155,9 @@ function showMatches(session){
 
 }
 
+
 // =======================
-// FORMAT MATCH INFO
+// MATCH INFO FORMAT
 // =======================
 
 function formatMatchInfo(match,type){
@@ -135,11 +171,7 @@ function formatMatchInfo(match,type){
 
  const venue = match.location || "";
 
- const status = match.status || "";
-
  text += `${name}\n\n`;
-
- // live
 
  if(type === "live"){
 
@@ -151,8 +183,6 @@ function formatMatchInfo(match,type){
 
  }
 
- // upcoming
-
  else if(type === "upcoming"){
 
   const date = match.start_date_time || "";
@@ -163,8 +193,6 @@ function formatMatchInfo(match,type){
   text += `Upcoming\n\n`;
 
  }
-
- // recent
 
  else if(type === "recent"){
 
@@ -184,6 +212,7 @@ function formatMatchInfo(match,type){
  return text;
 
 }
+
 
 // =======================
 // SMS LISTENER
@@ -218,7 +247,6 @@ app.post("/sms_listener", async (req,res)=>{
 
   const session = sessions[user];
 
-  // start command
 
   if(message.includes(config.app.shortcode)){
 
@@ -229,7 +257,8 @@ app.post("/sms_listener", async (req,res)=>{
 
   }
 
-  // ================= MAIN MENU =================
+
+  // MAIN MENU
 
   if(session.menu === "main"){
 
@@ -273,7 +302,8 @@ app.post("/sms_listener", async (req,res)=>{
 
   }
 
-  // ================= MATCH LIST =================
+
+  // MATCH LIST
 
   if(session.menu === "matches"){
 
@@ -314,7 +344,8 @@ app.post("/sms_listener", async (req,res)=>{
 
   }
 
-  // ================= MATCH INFO =================
+
+  // MATCH INFO
 
   if(session.menu === "score"){
 
@@ -348,6 +379,7 @@ app.post("/sms_listener", async (req,res)=>{
 
 });
 
+
 // =======================
 // HEALTH CHECK
 // =======================
@@ -357,6 +389,7 @@ app.get("/",(req,res)=>{
  res.send("BDApps Cricket Server Running");
 
 });
+
 
 // =======================
 // SERVER START

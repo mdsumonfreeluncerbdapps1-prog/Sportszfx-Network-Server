@@ -29,10 +29,11 @@ const DETAIL_API =
 // =======================
 
 let sessions = {};
+const SESSION_LIMIT = 5000;
 
 
 // =======================
-// FETCH MATCH
+// FETCH MATCH LIST
 // =======================
 
 async function fetchMatches(url){
@@ -45,9 +46,9 @@ async function fetchMatches(url){
 
   return [];
 
- }catch(e){
+ }catch(err){
 
-  console.log(e.message);
+  console.log("API Error:",err.message);
   return [];
 
  }
@@ -56,19 +57,20 @@ async function fetchMatches(url){
 
 
 // =======================
-// FETCH DETAIL
+// FETCH MATCH DETAIL
 // =======================
 
-async function fetchMatchDetail(id){
+async function fetchMatchDetail(matchId){
 
  try{
 
-  const res = await axios.get(`${DETAIL_API}${id}`);
+  const res = await axios.get(`${DETAIL_API}${matchId}`);
 
   return res.data || {};
 
- }catch(e){
+ }catch(err){
 
+  console.log("Detail API Error:",err.message);
   return {};
 
  }
@@ -85,6 +87,7 @@ function shortTeam(name){
  if(!name) return "";
 
  return name
+ .trim()
  .split(" ")
  .map(w => w[0])
  .join("")
@@ -102,22 +105,23 @@ function matchTitle(match){
 
  const name = match.match_name || "";
 
- // detect match type
+ // match type detect
  const typeMatch =
  name.match(/(\d+(st|nd|rd|th)\sMatch|\d+(st|nd|rd|th)\sODI|\d+(st|nd|rd|th)\sT20I|\d+(st|nd|rd|th)\sTest|\d+(st|nd|rd|th)\sunofficial\sTest)/i);
 
  const matchType = typeMatch ? typeMatch[0] : "Match";
 
- // detect teams using score pattern
- const teams =
- name.match(/([A-Za-z ]+)\s\d+[-\/]\d+.*?([A-Za-z ]+)\sDay/i);
 
- if(teams){
+ // detect teams from score pattern
+ const teamMatch =
+ name.match(/([A-Za-z ]+)\s\d+[-\/]\d+\s([A-Za-z ]+)/);
 
-  const t1 = shortTeam(teams[1]);
-  const t2 = shortTeam(teams[2]);
+ if(teamMatch){
 
-  return `${matchType} . ${t1} VS ${t2}`;
+  const team1 = shortTeam(teamMatch[1]);
+  const team2 = shortTeam(teamMatch[2]);
+
+  return `${matchType} . ${team1} VS ${team2}`;
 
  }
 
@@ -127,7 +131,7 @@ function matchTitle(match){
 
 
 // =======================
-// MATCH LIST
+// MATCH LIST MENU
 // =======================
 
 function showMatches(session){
@@ -139,9 +143,9 @@ function showMatches(session){
 
  let title = "Matches";
 
- if(session.type==="live") title="Live Matches";
- if(session.type==="upcoming") title="Upcoming Matches";
- if(session.type==="recent") title="Recent Matches";
+ if(session.type === "live") title = "Live Matches";
+ if(session.type === "upcoming") title = "Upcoming Matches";
+ if(session.type === "recent") title = "Recent Matches";
 
  let menu = `${title}\n\n`;
 
@@ -165,34 +169,38 @@ function showMatches(session){
 
 
 // =======================
-// MATCH INFO
+// MATCH INFO FORMAT
 // =======================
 
 function formatMatchInfo(match,type){
 
- let text="Match Information\n\n";
+ let text = `Match Information\n\n`;
 
  text += `${match.match_name || ""}\n\n`;
 
- if(type==="live"){
+ if(type === "live"){
 
-  text+="Live\n\n";
-
- }
-
- if(type==="upcoming"){
-
-  text+="Upcoming\n\n";
+  text += "Live\n\n";
 
  }
 
- if(type==="recent"){
+ if(type === "upcoming"){
 
-  if(match.result) text+=`${match.result}\n\n`;
+  text += "Upcoming\n\n";
 
  }
 
- text+="1 Refresh\n0 Back";
+ if(type === "recent"){
+
+  if(match.result){
+
+   text += `${match.result}\n\n`;
+
+  }
+
+ }
+
+ text += "1 Refresh\n0 Back";
 
  return text;
 
@@ -203,156 +211,179 @@ function formatMatchInfo(match,type){
 // SMS LISTENER
 // =======================
 
-app.post("/sms_listener", async(req,res)=>{
+app.post("/sms_listener", async (req,res)=>{
 
- const msg=(req.body.message||"").trim().toLowerCase();
- const user=req.body.sourceAddress || "demo";
+ try{
 
- if(!sessions[user]){
+  const message = (req.body.message || "").trim().toLowerCase();
+  const user = req.body.sourceAddress || "demo";
 
-  sessions[user]={
+  if(Object.keys(sessions).length > SESSION_LIMIT){
 
-   menu:"main",
-   matches:[],
-   page:0,
-   type:"",
-   matchId:null
-
-  };
-
- }
-
- const s=sessions[user];
-
- if(msg.includes(config.app.shortcode)){
-
-  s.menu="main";
-  return res.send(config.menu.main);
-
- }
-
-
- // MAIN MENU
-
- if(s.menu==="main"){
-
-  if(msg==="1"){
-
-   s.matches=await fetchMatches(LIVE_API);
-   s.type="live";
+   sessions = {};
 
   }
 
-  else if(msg==="2"){
+  if(!sessions[user]){
 
-   s.matches=await fetchMatches(UPCOMING_API);
-   s.type="upcoming";
+   sessions[user] = {
 
-  }
+    menu:"main",
+    matches:[],
+    page:0,
+    type:"",
+    matchId:null
 
-  else if(msg==="3"){
-
-   s.matches=await fetchMatches(RECENT_API);
-   s.type="recent";
-
-  }
-
-  else{
-
-   return res.send(config.menu.default);
+   };
 
   }
 
-  s.menu="matches";
-  s.page=0;
-
-  return res.send(showMatches(s));
-
- }
+  const session = sessions[user];
 
 
- // MATCH LIST
+  // start command
 
- if(s.menu==="matches"){
+  if(message.includes(config.app.shortcode)){
 
-  if(msg==="0"){
+   session.menu = "main";
 
-   s.menu="main";
    return res.send(config.menu.main);
 
   }
 
-  if(msg==="9"){
 
-   s.page++;
-   return res.send(showMatches(s));
+  // ================= MAIN MENU =================
+
+  if(session.menu === "main"){
+
+   if(message === "1"){
+
+    session.matches = await fetchMatches(LIVE_API);
+    session.type = "live";
+
+   }
+
+   else if(message === "2"){
+
+    session.matches = await fetchMatches(UPCOMING_API);
+    session.type = "upcoming";
+
+   }
+
+   else if(message === "3"){
+
+    session.matches = await fetchMatches(RECENT_API);
+    session.type = "recent";
+
+   }
+
+   else{
+
+    return res.send(config.menu.default);
+
+   }
+
+   session.menu = "matches";
+   session.page = 0;
+
+   return res.send(showMatches(session));
 
   }
 
-  const index=(s.page*5)+(parseInt(msg)-1);
 
-  if(s.matches[index]){
+  // ================= MATCH LIST =================
 
-   const match=s.matches[index];
+  if(session.menu === "matches"){
 
-   s.matchId=match.match_id;
-   s.menu="score";
+   if(message === "0"){
 
-   const detail=await fetchMatchDetail(s.matchId);
+    session.menu = "main";
 
-   return res.send(formatMatchInfo(detail,s.type));
+    return res.send(config.menu.main);
+
+   }
+
+   if(message === "9"){
+
+    session.page++;
+
+    return res.send(showMatches(session));
+
+   }
+
+   const index = (session.page*5) + (parseInt(message)-1);
+
+   if(session.matches[index]){
+
+    const match = session.matches[index];
+
+    session.matchId = match.match_id;
+
+    const detail = await fetchMatchDetail(session.matchId);
+
+    session.menu = "score";
+
+    return res.send(formatMatchInfo(detail,session.type));
+
+   }
 
   }
+
+
+  // ================= MATCH INFO =================
+
+  if(session.menu === "score"){
+
+   if(message === "1"){
+
+    const detail = await fetchMatchDetail(session.matchId);
+
+    return res.send(formatMatchInfo(detail,session.type));
+
+   }
+
+   if(message === "0"){
+
+    session.menu = "matches";
+
+    return res.send(showMatches(session));
+
+   }
+
+  }
+
+  return res.send(config.menu.default);
+
+ }catch(err){
+
+  console.log("SMS Error:",err.message);
+
+  res.send("Service temporarily unavailable");
 
  }
-
-
- // SCORE PAGE
-
- if(s.menu==="score"){
-
-  if(msg==="1"){
-
-   const detail=await fetchMatchDetail(s.matchId);
-
-   return res.send(formatMatchInfo(detail,s.type));
-
-  }
-
-  if(msg==="0"){
-
-   s.menu="matches";
-
-   return res.send(showMatches(s));
-
-  }
-
- }
-
- res.send(config.menu.default);
 
 });
 
 
 // =======================
-// HEALTH
+// HEALTH CHECK
 // =======================
 
 app.get("/",(req,res)=>{
 
- res.send("Cricket Server Running");
+ res.send("BDApps Cricket Server Running");
 
 });
 
 
 // =======================
-// START
+// SERVER START
 // =======================
 
-const PORT=process.env.PORT || config.server.port;
+const PORT = process.env.PORT || config.server.port;
 
 app.listen(PORT,()=>{
 
- console.log("Server running on",PORT);
+ console.log("Server running on port",PORT);
 
 });

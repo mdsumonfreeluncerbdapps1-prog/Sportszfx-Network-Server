@@ -40,7 +40,7 @@ Deployment
 2. Deploy to a Node.js hosting service (Render / Railway / VPS)
 3. Set the BDApps SMS endpoint:
 
-https://yourdomain.com/sms_listener
+https://sportszfx-network-server-611x.onrender.com
 
 Project Structure
 

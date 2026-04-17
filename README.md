@@ -12,7 +12,7 @@ Features
 
 How It Works
 
-User sends SMS keyword to the BDApps shortcode.
+User sends SMS cricketscoreupdate to the BDApps 21213.
 The server processes the request and returns cricket match information via SMS menu.
 
 Menu Example

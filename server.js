@@ -20,7 +20,6 @@ const UPCOMING_API =
 const RECENT_API =
 "https://cricbuzz.autoaiassistant.com/api.php?action=recent&type=all";
 
-// match detail API
 const DETAIL_API =
 "https://cricbuzz.autoaiassistant.com/api.php?action=match&id=";
 
@@ -85,14 +84,11 @@ function matchTitle(match){
 
  const name = match.match_name || "";
 
- // detect match type
  const typeMatch =
  name.match(/(\d+(st|nd|rd|th)\sMatch|\d+(st|nd|rd|th)\sODI|\d+(st|nd|rd|th)\sT20I|\d+(st|nd|rd|th)\sTest|\d+(st|nd|rd|th)\sunofficial\sTest)/i);
 
  const matchType = typeMatch ? typeMatch[0].replace("Match","Test") : "Match";
 
-
- // detect team names from score pattern
  const teamMatch =
  name.match(/([A-Za-z ]+)\s\d+[-\/]\d+.*?([A-Za-z ]+)\sDay/i);
 
@@ -139,7 +135,7 @@ function showMatches(session){
 
  list.forEach((m,i)=>{
 
-  menu += `${i+1}. ${matchTitle(m)}\n`;
+  menu += `${start + i + 1}. ${matchTitle(m)}\n`;
 
  });
 
@@ -323,7 +319,7 @@ app.post("/sms_listener", async (req,res)=>{
 
    }
 
-   const index = (session.page*5) + (parseInt(message)-1);
+   const index = parseInt(message) - 1;
 
    if(session.matches[index]){
 

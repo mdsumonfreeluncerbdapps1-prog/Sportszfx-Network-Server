@@ -46,6 +46,13 @@ const CACHE_TIME = 20000;
 
 
 // =======================
+// TEAM CACHE (NEW)
+// =======================
+
+let teamCache = {};
+
+
+// =======================
 // REMOVE DUPLICATE MATCHES
 // =======================
 
@@ -120,10 +127,10 @@ async function fetchMatchDetail(matchId){
 
 
 // =======================
-// UPDATED MATCH TITLE PARSER (TEAM FIELD SUPPORT)
+// MATCH TITLE WITH TEAM FALLBACK
 // =======================
 
-function matchTitle(match){
+async function matchTitle(match){
 
  const name = (match.match_name || "").toUpperCase();
 
@@ -135,7 +142,7 @@ function matchTitle(match){
  let team1 = "";
  let team2 = "";
 
- // case 1: team1 team2 field
+ // case 1: team field
  if(match.team1 && match.team2){
   team1 = (match.team1.short_name || match.team1.name || "").toUpperCase();
   team2 = (match.team2.short_name || match.team2.name || "").toUpperCase();
@@ -149,6 +156,7 @@ function matchTitle(match){
 
  // case 3: detect from match name
  else{
+
   const teamMatch =
   name.match(/([A-Z]{2,4})\sVS\s([A-Z]{2,4})/i);
 
@@ -156,6 +164,33 @@ function matchTitle(match){
    team1 = teamMatch[1];
    team2 = teamMatch[2];
   }
+
+ }
+
+ // =========================
+ // FALLBACK USING MATCH ID
+ // =========================
+
+ if((!team1 || !team2) && (match.match_id || match.id)){
+
+  const id = match.match_id || match.id;
+
+  if(teamCache[id]){
+   return `${matchType} . ${teamCache[id]}`;
+  }
+
+  const detail = await fetchMatchDetail(id);
+
+  if(detail.team1 && detail.team2){
+
+   const t1 = (detail.team1.short_name || detail.team1.name || "").toUpperCase();
+   const t2 = (detail.team2.short_name || detail.team2.name || "").toUpperCase();
+
+   teamCache[id] = `${t1} VS ${t2}`;
+
+   return `${matchType} . ${t1} VS ${t2}`;
+  }
+
  }
 
  if(team1 && team2){
@@ -171,7 +206,7 @@ function matchTitle(match){
 // SHOW MATCH LIST
 // =======================
 
-function showMatches(session){
+async function showMatches(session){
 
  const start = session.page * 5;
  const end = start + 5;
@@ -186,11 +221,13 @@ function showMatches(session){
 
  let menu = `${title}\n\n`;
 
- list.forEach((m,i)=>{
+ for(let i=0;i<list.length;i++){
 
-  menu += `${start + i + 1}. ${matchTitle(m)}\n`;
+  const titleText = await matchTitle(list[i]);
 
- });
+  menu += `${start + i + 1}. ${titleText}\n`;
+
+ }
 
  if(end < session.matches.length){
   menu += `9 More Matches\n`;
@@ -220,11 +257,9 @@ function formatMatchInfo(match,type){
  if(score.length){
 
   score.forEach(t=>{
-
    if(t.team_name && t.scores){
     text += `${t.team_name} ${t.scores[0] || ""}\n`;
    }
-
   });
 
   text += `\n`;
@@ -313,24 +348,18 @@ app.post("/sms_listener", async (req,res)=>{
   if(session.menu === "main"){
 
    if(message === "1"){
-
     session.matches = await fetchMatches("live", LIVE_API);
     session.type = "live";
-
    }
 
    else if(message === "2"){
-
     session.matches = await fetchMatches("upcoming", UPCOMING_API);
     session.type = "upcoming";
-
    }
 
    else if(message === "3"){
-
     session.matches = await fetchMatches("recent", RECENT_API);
     session.type = "recent";
-
    }
 
    else{
@@ -344,7 +373,7 @@ app.post("/sms_listener", async (req,res)=>{
     return res.send("No matches available\n\n0 Back");
    }
 
-   return res.send(showMatches(session));
+   return res.send(await showMatches(session));
 
   }
 
@@ -354,17 +383,13 @@ app.post("/sms_listener", async (req,res)=>{
   if(session.menu === "matches"){
 
    if(message === "0"){
-
     session.menu = "main";
     return res.send(config.menu.main);
-
    }
 
    if(message === "9"){
-
     session.page++;
-    return res.send(showMatches(session));
-
+    return res.send(await showMatches(session));
    }
 
    const index = session.page * 5 + (parseInt(message) - 1);
@@ -372,7 +397,6 @@ app.post("/sms_listener", async (req,res)=>{
    if(session.matches[index]){
 
     const match = session.matches[index];
-
     const matchId = match.match_id || match.id;
 
     const detail = await fetchMatchDetail(matchId);
@@ -381,7 +405,6 @@ app.post("/sms_listener", async (req,res)=>{
     session.menu = "score";
 
     return res.send(formatMatchInfo(detail,session.type));
-
    }
 
    return res.send("Invalid option\n\n0 Back");
@@ -410,10 +433,8 @@ app.post("/sms_listener", async (req,res)=>{
    }
 
    if(message === "0"){
-
     session.menu = "matches";
-    return res.send(showMatches(session));
-
+    return res.send(await showMatches(session));
    }
 
   }
@@ -423,7 +444,6 @@ app.post("/sms_listener", async (req,res)=>{
  }catch(err){
 
   console.log("SMS Error:",err.message);
-
   res.send("Service temporarily unavailable");
 
  }

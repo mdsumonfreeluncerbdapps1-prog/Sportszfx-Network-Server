@@ -11,14 +11,21 @@ app.use(express.urlencoded({ extended: true }));
 // API ENDPOINTS
 // =======================
 
-const LIVE_API = "https://cricbuzz.autoaiassistant.com/api.php?action=live&type=all";
-const UPCOMING_API = "https://cricbuzz.autoaiassistant.com/api.php?action=upcoming&type=all";
-const RECENT_API = "https://cricbuzz.autoaiassistant.com/api.php?action=recent&type=all";
-const DETAIL_API = "https://cricbuzz.autoaiassistant.com/api.php?action=match&id=";
+const LIVE_API =
+"https://cricbuzz.autoaiassistant.com/api.php?action=live&type=all";
+
+const UPCOMING_API =
+"https://cricbuzz.autoaiassistant.com/api.php?action=upcoming&type=all";
+
+const RECENT_API =
+"https://cricbuzz.autoaiassistant.com/api.php?action=recent&type=all";
+
+const DETAIL_API =
+"https://cricbuzz.autoaiassistant.com/api.php?action=match&id=";
 
 
 // =======================
-// SESSION STORAGE
+// SESSION
 // =======================
 
 let sessions = {};
@@ -26,20 +33,42 @@ const SESSION_LIMIT = 5000;
 
 
 // =======================
+// API CACHE (10x faster)
+// =======================
+
+let cache = {
+ live: { data: [], time: 0 },
+ upcoming: { data: [], time: 0 },
+ recent: { data: [], time: 0 }
+};
+
+const CACHE_TIME = 20000; // 20 seconds
+
+
+// =======================
 // FETCH MATCH LIST
 // =======================
 
-async function fetchMatches(url) {
+async function fetchMatches(type, url){
 
- try {
+ try{
 
-  const res = await axios.get(url, { timeout: 5000 });
+  const now = Date.now();
 
-  if(Array.isArray(res.data)) return res.data;
+  if(cache[type].data.length > 0 && now - cache[type].time < CACHE_TIME){
 
-  return [];
+   return cache[type].data;
 
- } catch (err) {
+  }
+
+  const res = await axios.get(url);
+
+  cache[type].data = res.data || [];
+  cache[type].time = now;
+
+  return cache[type].data;
+
+ }catch(err){
 
   console.log("API Error:", err.message);
   return [];
@@ -57,13 +86,13 @@ async function fetchMatchDetail(matchId){
 
  try{
 
-  const res = await axios.get(`${DETAIL_API}${matchId}`,{timeout:5000});
+  const res = await axios.get(`${DETAIL_API}${matchId}`);
 
   return res.data || {};
 
  }catch(err){
 
-  console.log("Detail API Error:",err.message);
+  console.log("Detail API Error:", err.message);
   return {};
 
  }
@@ -72,28 +101,27 @@ async function fetchMatchDetail(matchId){
 
 
 // =======================
-// SHORT MATCH TITLE
+// BETTER MATCH TITLE PARSER
 // =======================
 
 function matchTitle(match){
 
- const name = match.match_name || "Match";
+ const name = match.match_name || "";
 
- // detect match type
-
- const typeMatch = name.match(/(\d+(st|nd|rd|th)\s(Test|ODI|T20I|Match))/i);
+ const typeMatch =
+ name.match(/(\d+(st|nd|rd|th)\s(Test|ODI|T20I|Match))/i);
 
  const matchType = typeMatch ? typeMatch[0] : "Match";
 
+ const teams =
+ name.match(/([A-Z]{2,4})\s\d+[-\/]\d+.*?([A-Z]{2,4})/);
 
- // detect teams from score array
+ if(teams){
 
- if(match.score && match.score.length >= 2){
+  const team1 = teams[1];
+  const team2 = teams[2];
 
-  const t1 = match.score[0].team_name || "";
-  const t2 = match.score[1].team_name || "";
-
-  return `${matchType} . ${t1} VS ${t2}`;
+  return `${matchType} . ${team1} VS ${team2}`;
 
  }
 
@@ -148,24 +176,27 @@ function formatMatchInfo(match,type){
 
  let text = `Match Information\n\n`;
 
- const name = match.match_name || "Match";
+ const name = match.match_name || "";
 
  const venue = match.location || "";
 
+ const score = match.score || [];
+
  text += `${name}\n\n`;
 
- if(match.score && match.score.length){
+ if(score.length){
 
-  match.score.forEach(team=>{
+  score.forEach(t=>{
 
-   const teamName = team.team_name || "";
-   const score = team.scores ? team.scores[0] : "";
+   if(t.team_name && t.scores){
 
-   text += `${teamName} ${score}\n`;
+    text += `${t.team_name} ${t.scores[0] || ""}\n`;
+
+   }
 
   });
 
-  text += "\n";
+  text += `\n`;
 
  }
 
@@ -176,24 +207,20 @@ function formatMatchInfo(match,type){
 
  }
 
- else if(type === "upcoming"){
+ if(type === "upcoming"){
+
+  const date = match.start_date_time || "";
 
   text += `Venue: ${venue}\n`;
-  text += `Status: Upcoming\n\n`;
+  text += `Date: ${date}\n\n`;
 
  }
 
- else if(type === "recent"){
+ if(type === "recent"){
 
-  if(match.match_name){
+  if(match.result){
 
-   const resultMatch = match.match_name.match(/won by.*$/i);
-
-   if(resultMatch){
-
-    text += `${resultMatch[0]}\n\n`;
-
-   }
+   text += `${match.result}\n\n`;
 
   }
 
@@ -217,13 +244,11 @@ app.post("/sms_listener", async (req,res)=>{
   const message = (req.body.message || "").trim().toLowerCase();
   const user = req.body.sourceAddress || "demo";
 
-
   if(Object.keys(sessions).length > SESSION_LIMIT){
 
    sessions = {};
 
   }
-
 
   if(!sessions[user]){
 
@@ -242,9 +267,9 @@ app.post("/sms_listener", async (req,res)=>{
   const session = sessions[user];
 
 
-  // START COMMAND
+// START KEYWORD
 
-  if(message.includes(config.app.shortcode)){
+  if(message.includes(config.app.shortcode.toLowerCase())){
 
    session.menu = "main";
    session.page = 0;
@@ -254,27 +279,27 @@ app.post("/sms_listener", async (req,res)=>{
   }
 
 
-  // ================= MAIN MENU =================
+// ================= MAIN MENU =================
 
   if(session.menu === "main"){
 
    if(message === "1"){
 
-    session.matches = await fetchMatches(LIVE_API);
+    session.matches = await fetchMatches("live", LIVE_API);
     session.type = "live";
 
    }
 
    else if(message === "2"){
 
-    session.matches = await fetchMatches(UPCOMING_API);
+    session.matches = await fetchMatches("upcoming", UPCOMING_API);
     session.type = "upcoming";
 
    }
 
    else if(message === "3"){
 
-    session.matches = await fetchMatches(RECENT_API);
+    session.matches = await fetchMatches("recent", RECENT_API);
     session.type = "recent";
 
    }
@@ -299,13 +324,14 @@ app.post("/sms_listener", async (req,res)=>{
   }
 
 
-  // ================= MATCH LIST =================
+// ================= MATCH LIST =================
 
   if(session.menu === "matches"){
 
    if(message === "0"){
 
     session.menu = "main";
+
     return res.send(config.menu.main);
 
    }
@@ -313,13 +339,12 @@ app.post("/sms_listener", async (req,res)=>{
    if(message === "9"){
 
     session.page++;
+
     return res.send(showMatches(session));
 
    }
 
-
-   const index = (session.page * 5) + (parseInt(message) - 1);
-
+   const index = parseInt(message) - 1;
 
    if(session.matches[index]){
 
@@ -341,19 +366,15 @@ app.post("/sms_listener", async (req,res)=>{
   }
 
 
-  // ================= MATCH INFO =================
+// ================= MATCH INFO =================
 
   if(session.menu === "score"){
 
    if(message === "1"){
 
-    const matchId = session.selectedMatch.match_id;
-
-    const detail = await fetchMatchDetail(matchId);
-
-    session.selectedMatch = detail;
-
-    return res.send(formatMatchInfo(detail,session.type));
+    return res.send(
+     formatMatchInfo(session.selectedMatch,session.type)
+    );
 
    }
 
@@ -366,7 +387,6 @@ app.post("/sms_listener", async (req,res)=>{
    }
 
   }
-
 
   return res.send(config.menu.default);
 
@@ -401,5 +421,22 @@ const PORT = process.env.PORT || config.server.port;
 app.listen(PORT,()=>{
 
  console.log("Server running on port",PORT);
+
+});
+
+
+// =======================
+// SERVER CRASH PROTECTION
+// =======================
+
+process.on("uncaughtException", err => {
+
+ console.error("Uncaught Exception:", err);
+
+});
+
+process.on("unhandledRejection", err => {
+
+ console.error("Unhandled Rejection:", err);
 
 });

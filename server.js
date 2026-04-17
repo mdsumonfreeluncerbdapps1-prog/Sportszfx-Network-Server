@@ -82,34 +82,26 @@ async function fetchMatchDetail(matchId){
 
 
 // =======================
-// SHORT MATCH FORMAT
+// MATCH TITLE PARSER
 // =======================
 
 function matchTitle(match){
 
  const name = match.match_name || "";
 
- // detect match type
-
+ // match type detect
  const typeMatch =
  name.match(/(\d+(st|nd|rd|th)\sMatch|\d+(st|nd|rd|th)\sODI|\d+(st|nd|rd|th)\sT20I|\d+(st|nd|rd|th)\sTest|\d+(st|nd|rd|th)\sT10)/i);
 
  const matchType = typeMatch ? typeMatch[0] : "Match";
 
- // detect teams
-
- const vsMatch = name.match(/([A-Za-z ]+)\s+vs\s+([A-Za-z ]+)/i);
+ // team detect
+ const vsMatch = name.match(/([A-Za-z]+)\s+vs\s+([A-Za-z]+)/i);
 
  if(vsMatch){
 
-  const short = t =>
-   t.split(" ")
-   .map(w=>w[0])
-   .join("")
-   .toUpperCase();
-
-  const team1 = short(vsMatch[1]);
-  const team2 = short(vsMatch[2]);
+  const team1 = vsMatch[1].substring(0,3).toUpperCase();
+  const team2 = vsMatch[2].substring(0,3).toUpperCase();
 
   return `${matchType} . ${team1} VS ${team2}`;
 
@@ -249,6 +241,8 @@ app.post("/sms_listener", async (req,res)=>{
 
   const session = sessions[user];
 
+
+  // start command
 
   if(message.includes(config.app.shortcode)){
 

@@ -6,21 +6,14 @@ const axios = require("axios")
 const app = express()
 
 app.use(express.json())
-app.use(express.urlencoded({ extended: true }))
-
-// =======================
-// CONFIG
-// =======================
+app.use(express.urlencoded({extended:true}))
 
 const PORT = process.env.PORT || 3000
-
 const START_COMMAND = "cricketscoreupdate"
 
-const SESSION_LIMIT = 5000
-
-// =======================
-// APIS
-// =======================
+// =====================
+// APIs
+// =====================
 
 const LIVE_API =
 "https://cricbuzz.autoaiassistant.com/api.php?action=live&type=all"
@@ -34,15 +27,17 @@ const RECENT_API =
 const DETAIL_API =
 "https://cricbuzz.autoaiassistant.com/api.php?action=match&id="
 
-// =======================
+// =====================
 // SESSION STORE
-// =======================
+// =====================
 
 let sessions = {}
 
-// =======================
-// FETCH MATCH LIST
-// =======================
+const SESSION_LIMIT = 5000
+
+// =====================
+// FETCH MATCHES
+// =====================
 
 async function fetchMatches(url){
 
@@ -50,13 +45,11 @@ async function fetchMatches(url){
 
   const res = await axios.get(url)
 
-  if(Array.isArray(res.data)) return res.data
-
-  return []
+  return Array.isArray(res.data) ? res.data : []
 
  }catch(err){
 
-  console.log("Match API error:",err.message)
+  console.log("API error:",err.message)
 
   return []
 
@@ -64,9 +57,9 @@ async function fetchMatches(url){
 
 }
 
-// =======================
+// =====================
 // FETCH MATCH DETAIL
-// =======================
+// =====================
 
 async function fetchMatchDetail(id){
 
@@ -78,7 +71,7 @@ async function fetchMatchDetail(id){
 
  }catch(err){
 
-  console.log("Detail API error:",err.message)
+  console.log("Detail error:",err.message)
 
   return {}
 
@@ -86,51 +79,70 @@ async function fetchMatchDetail(id){
 
 }
 
-// =======================
-// TEAM SHORT CODE
-// =======================
+// =====================
+// TEAM SHORT NAME
+// =====================
 
 function shortTeam(name){
 
  if(!name) return ""
 
  return name
-  .trim()
-  .split(" ")
-  .map(w => w[0])
-  .join("")
-  .toUpperCase()
-  .substring(0,3)
+ .split(" ")
+ .map(w=>w[0])
+ .join("")
+ .toUpperCase()
+ .substring(0,3)
 
 }
 
-// =======================
+// =====================
+// EXTRACT TEAMS
+// =====================
+
+function extractTeams(matchName){
+
+ const regex = /([A-Za-z ]+)\s+vs\s+([A-Za-z ]+)/i
+
+ const m = matchName.match(regex)
+
+ if(!m) return null
+
+ return {
+  t1: shortTeam(m[1]),
+  t2: shortTeam(m[2])
+ }
+
+}
+
+// =====================
 // MATCH TITLE
-// =======================
+// =====================
 
 function matchTitle(match){
 
  const name = match.match_name || ""
 
  const typeMatch =
- name.match(/(\d+(st|nd|rd|th)\sMatch|\d+(st|nd|rd|th)\sODI|\d+(st|nd|rd|th)\sT20I|\d+(st|nd|rd|th)\sTest)/i)
+ name.match(/(\d+(st|nd|rd|th)\sTest|\d+(st|nd|rd|th)\sODI|\d+(st|nd|rd|th)\sT20I|\d+(st|nd|rd|th)\sunofficial\sTest)/i)
 
  const matchType = typeMatch ? typeMatch[0] : "Match"
 
- const team1 = shortTeam(match.team1 || "")
- const team2 = shortTeam(match.team2 || "")
+ const teams = extractTeams(name)
 
- if(team1 && team2){
-  return `${matchType} . ${team1} VS ${team2}`
+ if(teams){
+
+  return `${matchType} . ${teams.t1} VS ${teams.t2}`
+
  }
 
  return matchType
 
 }
 
-// =======================
+// =====================
 // MATCH LIST MENU
-// =======================
+// =====================
 
 function showMatches(session){
 
@@ -141,9 +153,9 @@ function showMatches(session){
 
  let title = "Matches"
 
- if(session.type === "live") title = "Live Matches"
- if(session.type === "upcoming") title = "Upcoming Matches"
- if(session.type === "recent") title = "Recent Matches"
+ if(session.type==="live") title="Live Matches"
+ if(session.type==="upcoming") title="Upcoming Matches"
+ if(session.type==="recent") title="Recent Matches"
 
  let menu = `${title}\n\n`
 
@@ -165,9 +177,9 @@ function showMatches(session){
 
 }
 
-// =======================
-// MATCH DETAIL SCREEN
-// =======================
+// =====================
+// MATCH INFO
+// =====================
 
 function formatMatchInfo(match,type){
 
@@ -175,69 +187,39 @@ function formatMatchInfo(match,type){
 
  text += `${match.match_name || ""}\n\n`
 
- const team1 = match.team1 || ""
- const team2 = match.team2 || ""
+ if(type==="live") text += "Live Match\n\n"
 
- const score1 = match.score1 || ""
- const score2 = match.score2 || ""
+ if(type==="upcoming") text += "Upcoming Match\n\n"
 
- const overs1 = match.overs1 || ""
- const overs2 = match.overs2 || ""
+ if(type==="recent" && match.result){
 
- if(score1){
-
-  text += `${team1} ${score1} (${overs1})\n`
+  text += `${match.result}\n\n`
 
  }
 
- if(score2){
-
-  text += `${team2} ${score2} (${overs2})\n`
-
- }
-
- if(type === "live"){
-
-  text += "\nLive Match\n"
-
- }
-
- if(type === "upcoming"){
-
-  text += "\nUpcoming Match\n"
-
- }
-
- if(type === "recent" && match.result){
-
-  text += `\n${match.result}\n`
-
- }
-
- text += "\n1 Refresh\n0 Back"
+ text += "1 Refresh\n0 Back"
 
  return text
 
 }
 
-// =======================
+// =====================
 // MAIN MENU
-// =======================
+// =====================
 
 function mainMenu(){
 
- return (
-"Cricket Score Update\n\n"+
-"1 Live Matches\n"+
-"2 Upcoming Matches\n"+
-"3 Recent Matches"
- )
+ return `Cricket Score Update
+
+1 Live Matches
+2 Upcoming Matches
+3 Recent Matches`
 
 }
 
-// =======================
+// =====================
 // SMS LISTENER
-// =======================
+// =====================
 
 app.post("/sms_listener", async (req,res)=>{
 
@@ -266,40 +248,34 @@ app.post("/sms_listener", async (req,res)=>{
 
   const session = sessions[user]
 
-  // =======================
-  // START COMMAND
-  // =======================
-
+  // start command
   if(message.includes(START_COMMAND)){
 
-   session.menu = "main"
+   session.menu="main"
 
    return res.send(mainMenu())
 
   }
 
-  // =======================
   // MAIN MENU
-  // =======================
+  if(session.menu==="main"){
 
-  if(session.menu === "main"){
-
-   if(message === "1"){
+   if(message==="1"){
 
     session.matches = await fetchMatches(LIVE_API)
-    session.type = "live"
+    session.type="live"
 
    }
-   else if(message === "2"){
+   else if(message==="2"){
 
     session.matches = await fetchMatches(UPCOMING_API)
-    session.type = "upcoming"
+    session.type="upcoming"
 
    }
-   else if(message === "3"){
+   else if(message==="3"){
 
     session.matches = await fetchMatches(RECENT_API)
-    session.type = "recent"
+    session.type="recent"
 
    }
    else{
@@ -308,28 +284,25 @@ app.post("/sms_listener", async (req,res)=>{
 
    }
 
-   session.menu = "matches"
-   session.page = 0
+   session.menu="matches"
+   session.page=0
 
    return res.send(showMatches(session))
 
   }
 
-  // =======================
   // MATCH LIST
-  // =======================
+  if(session.menu==="matches"){
 
-  if(session.menu === "matches"){
+   if(message==="0"){
 
-   if(message === "0"){
-
-    session.menu = "main"
+    session.menu="main"
 
     return res.send(mainMenu())
 
    }
 
-   if(message === "9"){
+   if(message==="9"){
 
     session.page++
 
@@ -337,7 +310,7 @@ app.post("/sms_listener", async (req,res)=>{
 
    }
 
-   const index = (session.page*5) + (parseInt(message)-1)
+   const index = (session.page*5)+(parseInt(message)-1)
 
    if(session.matches[index]){
 
@@ -347,7 +320,7 @@ app.post("/sms_listener", async (req,res)=>{
 
     const detail = await fetchMatchDetail(session.matchId)
 
-    session.menu = "score"
+    session.menu="score"
 
     return res.send(formatMatchInfo(detail,session.type))
 
@@ -355,13 +328,10 @@ app.post("/sms_listener", async (req,res)=>{
 
   }
 
-  // =======================
   // MATCH DETAIL
-  // =======================
+  if(session.menu==="score"){
 
-  if(session.menu === "score"){
-
-   if(message === "1"){
+   if(message==="1"){
 
     const detail = await fetchMatchDetail(session.matchId)
 
@@ -369,9 +339,9 @@ app.post("/sms_listener", async (req,res)=>{
 
    }
 
-   if(message === "0"){
+   if(message==="0"){
 
-    session.menu = "matches"
+    session.menu="matches"
 
     return res.send(showMatches(session))
 
@@ -391,19 +361,19 @@ app.post("/sms_listener", async (req,res)=>{
 
 })
 
-// =======================
+// =====================
 // HEALTH CHECK
-// =======================
+// =====================
 
 app.get("/",(req,res)=>{
 
- res.send("Cricket SMS Server Running")
+ res.send("Cricket Score Server Running")
 
 })
 
-// =======================
+// =====================
 // SERVER START
-// =======================
+// =====================
 
 app.listen(PORT,()=>{
 
